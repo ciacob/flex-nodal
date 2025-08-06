@@ -258,6 +258,10 @@
                     g.beginFill(lineColor, pt.synthetic ? 0.1 : 1);
                     g.drawCircle(pt.x, pt.y, coords.markerDrawRadius);
                     g.endFill();
+
+                    // Reset the line source to the last known joint (or else, the next drawing
+                    // operation would start from the last drawn marker's boundaries).
+                    g.moveTo(pt.x, pt.y);
                 }
             }
         ]]>
