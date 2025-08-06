@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+    xmlns:s="library://ns.adobe.com/flex/spark"
+    xmlns:mx="library://ns.adobe.com/flex/mx">
+
+    <fx:Metadata>
+        [Style(name="lineColor", type="uint", format="Color", inherit="false")]
+        [Style(name="lineThickness", type="Number", inherit="false")]
+        
+        [Style(name="padding", type="Number", inherit="false")]
+        
+        [Style(name="layerColor", type="uint", format="Color", inherit="false")]
+        
+        [Style(name="chartBg", type="uint", format="Color", inherit="false")]
+        [Style(name="chartBgAlpha", type="Number", inherit="false")]
+        
+        [Style(name="yAxisColor", type="uint", format="Color", inherit="false")]
+        [Style(name="yAxisAlpha", type="Number", inherit="false")]
+        
+        [Style(name="xAxisColor", type="uint", format="Color", inherit="false")]
+        [Style(name="xAxisAlpha", type="Number", inherit="false")]
+    </fx:Metadata>
+
+    <fx:Script>
+        <![CDATA[
+            import flash.display.Graphics;
+            import mx.core.UIComponent;
+            
+            private static const DEFAULT_PADDING : uint = 5;
+
+            private static const DEFAULT_LAYER_COLOR : uint = 0xcccccc;
+            
+            private static const DEFAULT_CHART_BG : uint = 0xffffff;
+            
+            private static const DEFAULT_CHART_BG_ALPHA : Number = 0.8;
+            
+            private static const DEFAULT_Y_AXIS_COLOR : uint = 0x00ccff;
+            
+            private static const DEFAULT_Y_AXIS_ALPHA : Number = 0.6;
+            
+            private static const DEFAULT_X_AXIS_COLOR : uint = 0x00ffcc;
+            
+            private static const DEFAULT_X_AXIS_ALPHA : Number = 0.6;
+
+            private static const DEFAULT_LINE_COLOR : uint = 0x000000;
+
+            private static const DEFAULT_LINE_THICKNESS : uint = 2;
+            
+            private var _data:Array;
+            private var dataChanged:Boolean = false;
+            
+            private var bgSprite:UIComponent;
+            private var chartSprite:UIComponent;
+            
+            [Bindable]
+            public function set data(value:Array):void {
+                if (_data !== value) {
+                    _data = value;
+                    dataChanged = true;
+                    invalidateProperties();
+                }
+            }
+
+            public function get data():Array {
+                return _data;
+            }
+
+            override protected function createChildren () : void {
+                super.createChildren();
+
+                // Create and add layers
+                bgSprite = new UIComponent();
+                chartSprite = new UIComponent();
+                addElement(bgSprite);
+                addElement(chartSprite);
+            }
+            
+            override protected function commitProperties():void {
+                super.commitProperties();
+            
+                if (dataChanged) {
+                    dataChanged = false;
+                    invalidateDisplayList();
+                }
+            }
+            
+            override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+                super.updateDisplayList(unscaledWidth, unscaledHeight);
+            
+                var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight);
+                _drawBackground(coords);
+                _drawChart(coords);
+            }
+            
+            /**
+             * Helper, reads a style with fallback.
+             *
+             * @param name - Name of the style to read.
+             * @param $default - Default value to assume if not style can be retrieved for given name.
+             */
+            private function _getStyle(name:String, $default:*):* {
+                var val:* = getStyle(name);
+                if (val === undefined) {
+                    return $default;
+                }
+                return val;
+            }
+            
+            /**
+             * Computes all coordinates without actually drawing anything
+             */
+            private function _computeChartCoords(totalW:Number, totalH:Number):Object {
+                if (!_data || _data.length == 0) {
+                    return {points: [], plotX: 0, plotY: 0, plotW: 0, plotH: 0};
+                }
+            
+                // Styles
+                var padding:Number = _getStyle("padding", DEFAULT_PADDING);
+                var thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
+            
+                var markerDrawRadius:Number = thickness * 2;
+                var effectiveHalfMarker:Number = thickness * 2.5;
+                var effectiveMarkerSize:Number = effectiveHalfMarker * 2;
+            
+                var plotX:Number = padding + effectiveHalfMarker;
+                var plotY:Number = padding + effectiveHalfMarker;
+                var plotW:Number = totalW - (padding * 2) - effectiveMarkerSize;
+                var plotH:Number = totalH - (padding * 2) - effectiveMarkerSize;
+
+                var bgX : Number = padding;
+                var bgY : Number = padding;
+                var bgW : Number = totalW - (padding * 2);
+                var bgH : Number = totalH - (padding * 2);
+            
+                // Synthetic start/end
+                var syntheticStart:Array = null;
+                var hasLegitStart:Boolean = (_data[0][0] === 0);
+                if (!hasLegitStart) {
+                    syntheticStart = _data[0].concat();
+                    syntheticStart[0] = 0;
+                }
+            
+                var syntheticEnd:Array = null;
+                var hasLegitEnd:Boolean = (_data[_data.length - 1][0] === 1);
+                if (!hasLegitEnd) {
+                    syntheticEnd = _data[_data.length - 1].concat();
+                    syntheticEnd[0] = 1;
+                }
+            
+                var points:Array = [];
+                var count:int = _data.length;
+                if (syntheticStart)
+                    count++;
+                if (syntheticEnd)
+                    count++;
+            
+                var i:int = 0;
+                while (i < count) {
+                    var isSyntheticStart:Boolean = (i === 0 && syntheticStart);
+                    var isSyntheticEnd:Boolean = (i === (count - 1) && syntheticEnd);
+                    var pt:Array = isSyntheticStart
+                        ? syntheticStart
+                        : isSyntheticEnd
+                        ? syntheticEnd
+                        : _data[syntheticStart ? i - 1 : i];
+            
+                    var x:Number = plotX + pt[0] * plotW;
+                    var y:Number = plotY + (1 - pt[1]) * plotH;
+            
+                    points.push({x: x, y: y, synthetic: (isSyntheticStart || isSyntheticEnd)});
+                    i++;
+                }
+            
+                return {
+                        points: points,
+                        plotX: plotX,
+                        plotY: plotY,
+                        plotW: plotW,
+                        plotH: plotH,
+                        bgX: bgX,
+                        bgY: bgY,
+                        bgW: bgW,
+                        bgH: bgH,
+                        markerDrawRadius: markerDrawRadius
+                    };
+            }
+            
+            /**
+             * Draws the background layers
+             */
+            private function _drawBackground(coords:Object):void {
+                var g:Graphics = bgSprite.graphics;
+                g.clear();
+            
+                var totalW:Number = width;
+                var totalH:Number = height;
+            
+                var layerColor:uint = _getStyle("layerColor", DEFAULT_LAYER_COLOR);
+                var chartBg:uint = _getStyle("chartBg", DEFAULT_CHART_BG);
+                var chartBgAlpha:Number = _getStyle("chartBgAlpha", DEFAULT_CHART_BG_ALPHA);
+            
+                var yAxisColor:uint = _getStyle("yAxisColor", DEFAULT_Y_AXIS_COLOR);
+                var yAxisAlpha:Number = _getStyle("yAxisAlpha", DEFAULT_Y_AXIS_ALPHA);
+            
+                var xAxisColor:uint = _getStyle("xAxisColor", DEFAULT_X_AXIS_COLOR);
+                var xAxisAlpha:Number = _getStyle("xAxisAlpha", DEFAULT_X_AXIS_ALPHA);
+            
+                // Full layer background (padded area too)
+                g.beginFill(layerColor, 1);
+                g.drawRect(0, 0, totalW, totalH);
+                g.endFill();
+            
+                // Chart background (inside padded area)
+                g.beginFill(chartBg, chartBgAlpha);
+                g.drawRect(coords.bgX, coords.bgY, coords.bgW, coords.bgH);
+                g.endFill();
+            
+                // Y-axis (left half of chart area)
+                g.beginFill(yAxisColor, yAxisAlpha);
+                g.drawRect(coords.bgX, coords.bgY, coords.bgW / 2, coords.bgH);
+                g.endFill();
+            
+                // X-axis (bottom half of chart area) over the Y-axis fill
+                g.beginFill(xAxisColor, xAxisAlpha);
+                g.drawRect(coords.bgX, coords.bgY + coords.bgH / 2, coords.bgW, coords.bgH / 2);
+                g.endFill();
+            }
+            
+            /**
+             * Draws the line chart
+             */
+            private function _drawChart(coords:Object):void {
+                var g:Graphics = chartSprite.graphics;
+                g.clear();
+            
+                if (!coords.points.length)
+                    return;
+            
+                var lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
+                var thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
+            
+                // Transparent rect over chart for mouse events
+                g.beginFill(0x000000, 0.001);
+                g.drawRect(coords.plotX, coords.plotY, coords.plotW, coords.plotH);
+                g.endFill();
+            
+                g.lineStyle(thickness, lineColor, 1);
+            
+
+                for (var i:int = 0; i < coords.points.length; i++) {
+                    var pt:Object = coords.points[i];
+                    if (i == 0){
+                        g.moveTo(pt.x, pt.y);
+                    } else {
+                        g.lineTo(pt.x, pt.y);
+                    }
+            
+                    g.beginFill(lineColor, pt.synthetic ? 0.1 : 1);
+                    g.drawCircle(pt.x, pt.y, coords.markerDrawRadius);
+                    g.endFill();
+                }
+            }
+        ]]>
+    </fx:Script>
+</s:Group>

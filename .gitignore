@@ -1,0 +1,5 @@
+asconfig.json
+.vscode/settings.json
+.DS_Store
+.vscode/tasks.json
+bin
