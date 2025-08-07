@@ -20,7 +20,7 @@ package com.github.ciacob.flexnodal.utils {
         /**
          * Gives an instance, creating one if necessary.
          */
-        public function giveInstance():* {
+        public function give():* {
             var obj:* = (_pool.length > 0) ? _pool.pop() : new _clazz();
             _initialize(obj);
             return obj;
@@ -29,7 +29,7 @@ package com.github.ciacob.flexnodal.utils {
         /**
          * Takes an instance back and stores it in the pool.
          */
-        public function takeInstance(obj:*):void {
+        public function takeBack(obj:*):void {
             if (!(obj is _clazz)) {
                 throw new ArgumentError("Object is not of expected type: " + _clazz);
             }

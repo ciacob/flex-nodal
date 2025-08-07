@@ -26,6 +26,8 @@
             import flash.display.Graphics;
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.InstanceFactory;
+            import mx.core.UIComponent;
+            import mx.core.UIComponent;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -47,13 +49,17 @@
             
             private static const DEFAULT_LINE_THICKNESS:uint = 2;
             
-            private var bgLayer:UIComponent;
+            private var _bgLayer:UIComponent;
             
-            private var chartLayer:UIComponent;
-
-            private var markerLayer:UIComponent;
+            private var _chartLayer:UIComponent;
             
+            private var _markerLayer:UIComponent;
+            
+            private var _proofedPoints:Array;
+            
+            // -------------------
             // The `data` property
+            // -------------------
             private var _data:Array;
             
             private var _dataChanged:Boolean = false;
@@ -71,7 +77,9 @@
                 return _data;
             }
             
+            // -------------------------------
             // The `drawablesFactory` property
+            // -------------------------------
             private var _drawablesFactory:InstanceFactory;
             
             private var _drawablesFactoryChanged:Boolean;
@@ -88,23 +96,31 @@
                 }
             }
             
+            /**
+             * @see Group.createChildren()
+             */
             override protected function createChildren():void {
                 super.createChildren();
             
                 // Create and add layers
-                bgLayer = new UIComponent();
-                chartLayer = new UIComponent();
-                markerLayer = new UIComponent();
-                addElement(bgLayer);
-                addElement(chartLayer);
-                addElement(markerLayer);
+                _bgLayer = new UIComponent();
+                _chartLayer = new UIComponent();
+                _markerLayer = new UIComponent();
+                addElement(_bgLayer);
+                addElement(_chartLayer);
+                addElement(_markerLayer);
             }
             
+            /**
+             * @see Group.commitProperties
+             */
             override protected function commitProperties():void {
                 super.commitProperties();
             
                 if (_dataChanged) {
                     _dataChanged = false;
+                    _proofedPoints = _proofPoints(_data);
+                    _provisionMarkers(_proofedPoints, _markerLayer);
                     invalidateDisplayList();
                 }
             
@@ -114,10 +130,13 @@
                 }
             }
             
+            /**
+             * @see Group.updateDisplayList
+             */
             override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
                 super.updateDisplayList(unscaledWidth, unscaledHeight);
             
-                var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight);
+                var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight, _proofedPoints);
                 _drawBackground(coords);
                 _drawChart(coords);
             }
@@ -137,10 +156,64 @@
             }
             
             /**
-             * Computes all coordinates without actually drawing anything
+             * Ensures that the point list starts at x=0 and ends at x=1.
+             * Adds synthetic points if necessary.
+             * Returns an array of { nx:Number, ny:Number, synthetic:Boolean }.
+             * (nx/ny are normalized to 0..1 space, not pixel coords.)
              */
-            private function _computeChartCoords(totalW:Number, totalH:Number):Object {
-                if (!_data || _data.length == 0) {
+            private function _proofPoints(data:Array):Array {
+                var result:Array = [];
+            
+                if (!data || data.length == 0)
+                    return result;
+            
+                // Synthetic start
+                var hasLegitStart:Boolean = (data[0][0] === 0);
+                if (!hasLegitStart) {
+                    result.push({nx: 0, ny: data[0][1], synthetic: true});
+                }
+            
+                // Original points
+                for (var i:int = 0; i < data.length; i++) {
+                    result.push({nx: data[i][0], ny: data[i][1], synthetic: false});
+                }
+            
+                // Synthetic end
+                var hasLegitEnd:Boolean = (data[data.length - 1][0] === 1);
+                if (!hasLegitEnd) {
+                    result.push({nx: 1, ny: data[data.length - 1][1], synthetic: true});
+                }
+            
+                return result;
+            }
+            
+            /**
+             * Ensures the markers layer contains as many containers as there are defined markers,
+             * recycling as much as possible. Does not (re)draw them.
+             */
+            private function _provisionMarkers(list:Array, container:UIComponent):void {
+
+                // Append marker slots if there are not enough
+                while (_markerLayer.numChildren < _data.length) {
+                    const markerToAdd:UIComponent = drawablesFactory.give();
+                    _markerLayer.addChild(markerToAdd);
+                    // TODO: wire added marker
+                }
+
+                // Trim marker slots if there are too many
+                while (_markerLayer.numChildren > _data.length) {
+                    const markerToRemove : UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
+                    // TODO: unwire marker being removed
+                    drawablesFactory.takeBack(markerToRemove);
+                }
+            }
+            
+            /**
+             * Computes pixel coordinates and chart background geometry
+             * from already-proofed normalized points.
+             */
+            private function _computeChartCoords(totalW:Number, totalH:Number, points:Array):Object {
+                if (!points || points.length == 0) {
                     return {points: [], plotX: 0, plotY: 0, plotW: 0, plotH: 0};
                 }
             
@@ -162,47 +235,17 @@
                 var bgW:Number = totalW - (padding * 2);
                 var bgH:Number = totalH - (padding * 2);
             
-                // Synthetic start/end
-                var syntheticStart:Array = null;
-                var hasLegitStart:Boolean = (_data[0][0] === 0);
-                if (!hasLegitStart) {
-                    syntheticStart = _data[0].concat();
-                    syntheticStart[0] = 0;
-                }
-            
-                var syntheticEnd:Array = null;
-                var hasLegitEnd:Boolean = (_data[_data.length - 1][0] === 1);
-                if (!hasLegitEnd) {
-                    syntheticEnd = _data[_data.length - 1].concat();
-                    syntheticEnd[0] = 1;
-                }
-            
-                var points:Array = [];
-                var count:int = _data.length;
-                if (syntheticStart)
-                    count++;
-                if (syntheticEnd)
-                    count++;
-            
-                var i:int = 0;
-                while (i < count) {
-                    var isSyntheticStart:Boolean = (i === 0 && syntheticStart);
-                    var isSyntheticEnd:Boolean = (i === (count - 1) && syntheticEnd);
-                    var pt:Array = isSyntheticStart
-                        ? syntheticStart
-                        : isSyntheticEnd
-                        ? syntheticEnd
-                        : _data[syntheticStart ? i - 1 : i];
-            
-                    var x:Number = plotX + pt[0] * plotW;
-                    var y:Number = plotY + (1 - pt[1]) * plotH;
-            
-                    points.push({x: x, y: y, synthetic: (isSyntheticStart || isSyntheticEnd)});
-                    i++;
+                // Map normalized to pixel coords
+                var pixelPoints:Array = [];
+                for (var i:int = 0; i < points.length; i++) {
+                    var np:Object = points[i];
+                    var px:Number = plotX + np.nx * plotW;
+                    var py:Number = plotY + (1 - np.ny) * plotH; // invert Y
+                    pixelPoints.push({x: px, y: py, synthetic: np.synthetic});
                 }
             
                 return {
-                        points: points,
+                        points: pixelPoints,
                         plotX: plotX,
                         plotY: plotY,
                         plotW: plotW,
@@ -219,7 +262,7 @@
              * Draws the background layers
              */
             private function _drawBackground(coords:Object):void {
-                var g:Graphics = bgLayer.graphics;
+                var g:Graphics = _bgLayer.graphics;
                 g.clear();
             
                 var totalW:Number = width;
@@ -260,11 +303,12 @@
              * Draws the line chart
              */
             private function _drawChart(coords:Object):void {
-                var g:Graphics = chartLayer.graphics;
+                var g:Graphics = _chartLayer.graphics;
                 g.clear();
             
-                if (!coords.points.length)
+                if (!coords.points.length) {
                     return;
+                }
             
                 var lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
                 var thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
@@ -285,44 +329,37 @@
                         g.lineTo(pt.x, pt.y);
                     }
             
-                    // Create and place a marker UIComponent
-                    _createMarkerForPoint(pt.x, pt.y, lineColor, thickness, coords.markerDrawRadius, pt.synthetic);
+                    // (Re)draw and place a marker UIComponent
+                    const marker : UIComponent = UIComponent (_markerLayer.getChildAt(i));
+                    _drawMarker (marker, lineColor, thickness, coords.markerDrawRadius, pt.synthetic);
+                    _positionMarker (marker, pt);
                 }
             }
             
             /**
-             * Draws the control points.
+             * (Re)draws the graphical representation of a marker.
              */
-            private function _createMarkerForPoint(
-                    cx:Number, cy:Number,
-                    color:uint,
-                    thickness:Number, radius:Number, 
-                    isSynthetic:Boolean):void {
-                        
-                if (!_drawablesFactory) {
-                    return;
-                }
-            
-                // Get a recycled/new UIComponent from the factory
-                var marker:UIComponent = _drawablesFactory.giveInstance() as UIComponent;
-                if (!marker) {
-                    return;
-                }
-            
-                // Draw around origin
-                var mg:Graphics = marker.graphics;
-                mg.lineStyle(thickness, color, 1);
-                mg.beginFill(color, isSynthetic ? 0.1 : 1);
-                mg.drawCircle(0, 0, radius);
-                mg.endFill();
-            
-                // Place at exact joint coordinates
-                marker.x = cx;
-                marker.y = cy;
-            
-                // Add to chart’s display list
-                addElement(marker);
+            private function _drawMarker (marker : UIComponent,
+                color : uint, lineThickness : uint, circleRadius : uint,
+                isSyntheticPoint : Boolean) : void {
+
+                // Draw around origin, so that resulting graphic is anchored in its center.
+                const g:Graphics = marker.graphics;
+                g.clear();
+                g.lineStyle(lineThickness, color, 1);
+                g.beginFill(color, isSyntheticPoint ? 0.1 : 1);
+                g.drawCircle(0, 0, circleRadius);
+                g.endFill();
             }
+
+            /**
+             * (Re)positions an existing marker
+             */
+            private function _positionMarker (marker : UIComponent, point : Object) : void {
+                marker.x = point.x;
+                marker.y = point.y;
+            }
+
         ]]>
     </fx:Script>
 </s:Group>
