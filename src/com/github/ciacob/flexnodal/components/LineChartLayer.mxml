@@ -49,60 +49,102 @@
             
             private static const DEFAULT_LINE_THICKNESS:uint = 2;
             
+            // The container to draw background decorations in
             private var _bgLayer:UIComponent;
             
+            // The container to draw the line of this chart in
             private var _chartLayer:UIComponent;
             
+            // The container to draw the MARKERS of this chart in. A
+            // marker is a visual representation of a chart line joint
+            // that can be interacted with (e.g., via mouse).
             private var _markerLayer:UIComponent;
             
-            private var _proofedPoints:Array;
+            // List of all NODES that define this line chart.
+            // A node is a logical representation of a marker. It 
+            // contains information about the state of that marker (e.g.,
+            // whether it is currently selected, its originating values,
+            // its current screen coordinates, etc.).
+            private var _nodes:Array;
             
             // -------------------
-            // The `data` property
+            // The `values` property
             // -------------------
-            private var _data:Array;
+
+            // Holder of all raw VALUES that define this line chart.
+            // Values are user-provided doublets of abstract and
+            // normalized [x,y] values, e.g.:
+            // [ [0,0], [0.5,1], [1,0] ]
+            // 
+            // The above abstractly defines a simple chart line
+            // that starts and ends at the very bottom on the Y axis,
+            // while climbing fully in its middle (on the X axis),
+            // thus creating a simple "hill" profile. 
+            private var _values:Array;
             
-            private var _dataChanged:Boolean = false;
+            // Flag to raise when the client code has externally changed
+            // the input values.
+            private var _valuesChanged:Boolean = false;
             
+            /**
+             * Sets a new set of values. Cause the chart to be
+             * updated.
+             */
             [Bindable]
-            public function set data(value:Array):void {
-                if (_data !== value) {
-                    _data = value;
-                    _dataChanged = true;
-                    invalidateProperties();
-                }
-            }
-            
-            public function get data():Array {
-                return _data;
-            }
-            
-            // -------------------------------
-            // The `drawablesFactory` property
-            // -------------------------------
-            private var _drawablesFactory:InstanceFactory;
-            
-            private var _drawablesFactoryChanged:Boolean;
-            
-            public function get drawablesFactory():InstanceFactory {
-                return _drawablesFactory;
-            }
-            
-            public function set drawablesFactory(value:InstanceFactory):void {
-                if (_drawablesFactory !== value) {
-                    _drawablesFactory = value;
-                    _drawablesFactoryChanged = true;
+            public function set values(value:Array):void {
+                if (_values !== value) {
+                    _values = value;
+                    _valuesChanged = true;
                     invalidateProperties();
                 }
             }
             
             /**
+             * Gets the current set of values, which will reflect
+             * any changes the user made to the chart (e.g., via mouse).
+             */
+            public function get values():Array {
+                return _values;
+            }
+            
+            // -------------------------------
+            // The `markersFactory` property
+            // -------------------------------
+
+            // Externally injected class instance responsible for providing
+            // UIComponents to represent the chart markers.
+            private var _markersFactory:InstanceFactory;
+            
+            // Flag to raise when the client code has externally changed the
+            // markers factory.
+            private var _markersFactoryChanged:Boolean;
+            
+            /**
+             * Gets the markers factory currently in use.
+             */
+            public function get markersFactory():InstanceFactory {
+                return _markersFactory;
+            }
+            
+            /**
+             * Sets a new markers factory to use. Has no immediate effect on
+             * the chart rendering.
+             */
+            public function set markersFactory(value:InstanceFactory):void {
+                if (_markersFactory !== value) {
+                    _markersFactory = value;
+                    _markersFactoryChanged = true;
+                    invalidateProperties();
+                }
+            }
+            
+            /**
+             * Overridden to Create and add layers.
              * @see Group.createChildren()
              */
             override protected function createChildren():void {
                 super.createChildren();
             
-                // Create and add layers
                 _bgLayer = new UIComponent();
                 _chartLayer = new UIComponent();
                 _markerLayer = new UIComponent();
@@ -112,149 +154,154 @@
             }
             
             /**
+             * Overridden to parse incoming values and schedule (re)drawing
+             * the chart.
              * @see Group.commitProperties
              */
             override protected function commitProperties():void {
                 super.commitProperties();
             
-                if (_dataChanged) {
-                    _dataChanged = false;
-                    _proofedPoints = _proofPoints(_data);
-                    _provisionMarkers(_proofedPoints, _markerLayer);
+                if (_valuesChanged) {
+                    _valuesChanged = false;
+                    _nodes = _proofValues(_values);
+                    _provisionMarkers(_nodes, _markerLayer);
                     invalidateDisplayList();
                 }
             
-                if (_drawablesFactoryChanged) {
-                    _drawablesFactoryChanged = false;
+                if (_markersFactoryChanged) {
+                    _markersFactoryChanged = false;
                     invalidateDisplayList();
                 }
             }
             
             /**
+             * Overridden to resolve nodes to current screen x,y coordinates,
+             * and draw the resulting chart lines and markers.
              * @see Group.updateDisplayList
              */
             override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
                 super.updateDisplayList(unscaledWidth, unscaledHeight);
             
-                var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight, _proofedPoints);
+                var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
                 _drawBackground(coords);
                 _drawChart(coords);
             }
             
             /**
-             * Helper, reads a style with fallback.
+             * Helper, reads a CSS style with a fallback value.
              *
              * @param name - Name of the style to read.
-             * @param $default - Default value to assume if not style can be retrieved for given name.
+             * @param fallback - Default value to assume if no style can be retrieved for given name.
              */
-            private function _getStyle(name:String, $default:*):* {
+            private function _getStyle(name:String, fallback:*):* {
                 var val:* = getStyle(name);
                 if (val === undefined) {
-                    return $default;
+                    return fallback;
                 }
                 return val;
             }
             
             /**
-             * Ensures that the point list starts at x=0 and ends at x=1.
-             * Adds synthetic points if necessary.
-             * Returns an array of { nx:Number, ny:Number, synthetic:Boolean }.
-             * (nx/ny are normalized to 0..1 space, not pixel coords.)
+             * Parses incoming values into nodes.
+             * Ensures that the chart always starts on `0` and ends on `1` on the 
+             * X axis by adding synthetic nodes if necessary.
+             * Returns the full list of resulting nodes.
              */
-            private function _proofPoints(data:Array):Array {
-                var result:Array = [];
+            private function _proofValues(values:Array):Array {
+                var nodes:Array = [];
             
-                if (!data || data.length == 0)
-                    return result;
+                if (!values || values.length == 0)
+                    return nodes;
             
-                // Synthetic start
-                var hasLegitStart:Boolean = (data[0][0] === 0);
+                // Synthetic start node
+                var hasLegitStart:Boolean = (values[0][0] === 0);
                 if (!hasLegitStart) {
-                    result.push({nx: 0, ny: data[0][1], synthetic: true});
+                    nodes.push({nx: 0, ny: values[0][1], synthetic: true});
                 }
             
-                // Original points
-                for (var i:int = 0; i < data.length; i++) {
-                    result.push({nx: data[i][0], ny: data[i][1], synthetic: false});
+                // Natural nodes
+                for (var i:int = 0; i < values.length; i++) {
+                    nodes.push({nx: values[i][0], ny: values[i][1], synthetic: false});
                 }
             
-                // Synthetic end
-                var hasLegitEnd:Boolean = (data[data.length - 1][0] === 1);
+                // Synthetic end node
+                var hasLegitEnd:Boolean = (values[values.length - 1][0] === 1);
                 if (!hasLegitEnd) {
-                    result.push({nx: 1, ny: data[data.length - 1][1], synthetic: true});
+                    nodes.push({nx: 1, ny: values[values.length - 1][1], synthetic: true});
                 }
             
-                return result;
+                return nodes;
             }
             
             /**
-             * Ensures the markers layer contains as many containers as there are defined markers,
-             * recycling as much as possible. Does not (re)draw them.
+             * Ensures the markers layer contains the correct number of markers.
+             * No (re)drawing is done here.
              */
             private function _provisionMarkers(list:Array, container:UIComponent):void {
+                const numNodes : uint = _nodes.length;
 
-                // Append marker slots if there are not enough
-                while (_markerLayer.numChildren < _data.length) {
-                    const markerToAdd:UIComponent = drawablesFactory.give();
+                // Append
+                while (_markerLayer.numChildren < numNodes) {
+                    const markerToAdd:UIComponent = markersFactory.give();
                     _markerLayer.addChild(markerToAdd);
                     // TODO: wire added marker
                 }
 
-                // Trim marker slots if there are too many
-                while (_markerLayer.numChildren > _data.length) {
+                // Trim
+                while (_markerLayer.numChildren > numNodes) {
                     const markerToRemove : UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
                     // TODO: unwire marker being removed
-                    drawablesFactory.takeBack(markerToRemove);
+                    markersFactory.takeBack(markerToRemove);
                 }
             }
             
             /**
              * Computes pixel coordinates and chart background geometry
-             * from already-proofed normalized points.
+             * from existing nodes.
              */
-            private function _computeChartCoords(totalW:Number, totalH:Number, points:Array):Object {
-                if (!points || points.length == 0) {
-                    return {points: [], plotX: 0, plotY: 0, plotW: 0, plotH: 0};
+            private function _computeChartCoords(availableWidth:Number, availableHeight:Number, nodes:Array):Object {
+                if (!nodes || nodes.length == 0) {
+                    return {screenPoints: [], plotsAreaX: 0, plotsAreaY: 0, plotsAreaW: 0, plotsAreaH: 0};
                 }
             
                 // Styles
                 var padding:Number = _getStyle("padding", DEFAULT_PADDING);
                 var thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
-                var markerDrawRadius:Number = thickness * 2;
-                var effectiveHalfMarker:Number = thickness * 2.5;
-                var effectiveMarkerSize:Number = effectiveHalfMarker * 2;
+                var drawnMarkerRadius:Number = thickness * 2;
+                var actualMarkerHalf:Number = thickness * 2.5;
+                var actualMarkerSize:Number = actualMarkerHalf * 2;
             
-                var plotX:Number = padding + effectiveHalfMarker;
-                var plotY:Number = padding + effectiveHalfMarker;
-                var plotW:Number = totalW - (padding * 2) - effectiveMarkerSize;
-                var plotH:Number = totalH - (padding * 2) - effectiveMarkerSize;
+                var plotsAreaX:Number = padding + actualMarkerHalf;
+                var plotsAreaY:Number = padding + actualMarkerHalf;
+                var plotsAreaW:Number = availableWidth - (padding * 2) - actualMarkerSize;
+                var plotsAreaH:Number = availableHeight - (padding * 2) - actualMarkerSize;
             
-                var bgX:Number = padding;
-                var bgY:Number = padding;
-                var bgW:Number = totalW - (padding * 2);
-                var bgH:Number = totalH - (padding * 2);
+                var bgAreaX:Number = padding;
+                var bgAreaY:Number = padding;
+                var bgAreaW:Number = availableWidth - (padding * 2);
+                var bgAreaH:Number = availableHeight - (padding * 2);
             
                 // Map normalized to pixel coords
-                var pixelPoints:Array = [];
-                for (var i:int = 0; i < points.length; i++) {
-                    var np:Object = points[i];
-                    var px:Number = plotX + np.nx * plotW;
-                    var py:Number = plotY + (1 - np.ny) * plotH; // invert Y
-                    pixelPoints.push({x: px, y: py, synthetic: np.synthetic});
+                var screenPoints:Array = [];
+                for (var i:int = 0; i < nodes.length; i++) {
+                    var node:Object = nodes[i];
+                    var sx:Number = plotsAreaX + node.nx * plotsAreaW;
+                    var sy:Number = plotsAreaY + (1 - node.ny) * plotsAreaH; // invert Y
+                    screenPoints.push({x: sx, y: sy, synthetic: node.synthetic});
                 }
             
                 return {
-                        points: pixelPoints,
-                        plotX: plotX,
-                        plotY: plotY,
-                        plotW: plotW,
-                        plotH: plotH,
-                        bgX: bgX,
-                        bgY: bgY,
-                        bgW: bgW,
-                        bgH: bgH,
-                        markerDrawRadius: markerDrawRadius
+                        screenPoints: screenPoints,
+                        plotsAreaX: plotsAreaX,
+                        plotsAreaY: plotsAreaY,
+                        plotsAreaW: plotsAreaW,
+                        plotsAreaH: plotsAreaH,
+                        bgAreaX: bgAreaX,
+                        bgAreaY: bgAreaY,
+                        bgAreaW: bgAreaW,
+                        bgAreaH: bgAreaH,
+                        drawnMarkerRadius: drawnMarkerRadius
                     };
             }
             
@@ -265,8 +312,8 @@
                 var g:Graphics = _bgLayer.graphics;
                 g.clear();
             
-                var totalW:Number = width;
-                var totalH:Number = height;
+                var availableW:Number = width;
+                var availableH:Number = height;
             
                 var layerColor:uint = _getStyle("layerColor", DEFAULT_LAYER_COLOR);
                 var chartBg:uint = _getStyle("chartBg", DEFAULT_CHART_BG);
@@ -280,22 +327,22 @@
             
                 // Full layer background (padded area too)
                 g.beginFill(layerColor, 1);
-                g.drawRect(0, 0, totalW, totalH);
+                g.drawRect(0, 0, availableW, availableH);
                 g.endFill();
             
                 // Chart background (inside padded area)
                 g.beginFill(chartBg, chartBgAlpha);
-                g.drawRect(coords.bgX, coords.bgY, coords.bgW, coords.bgH);
+                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW, coords.bgAreaH);
                 g.endFill();
             
                 // Y-axis (left half of chart area)
                 g.beginFill(yAxisColor, yAxisAlpha);
-                g.drawRect(coords.bgX, coords.bgY, coords.bgW / 2, coords.bgH);
+                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW / 2, coords.bgAreaH);
                 g.endFill();
             
                 // X-axis (bottom half of chart area) over the Y-axis fill
                 g.beginFill(xAxisColor, xAxisAlpha);
-                g.drawRect(coords.bgX, coords.bgY + coords.bgH / 2, coords.bgW, coords.bgH / 2);
+                g.drawRect(coords.bgAreaX, coords.bgAreaY + coords.bgAreaH / 2, coords.bgAreaW, coords.bgAreaH / 2);
                 g.endFill();
             }
             
@@ -306,7 +353,7 @@
                 var g:Graphics = _chartLayer.graphics;
                 g.clear();
             
-                if (!coords.points.length) {
+                if (!coords.screenPoints.length) {
                     return;
                 }
             
@@ -315,24 +362,24 @@
             
                 // Transparent rect over chart for mouse events
                 g.beginFill(0x000000, 0.001);
-                g.drawRect(coords.plotX, coords.plotY, coords.plotW, coords.plotH);
+                g.drawRect(coords.plotsAreaX, coords.plotsAreaY, coords.plotsAreaW, coords.plotsAreaH);
                 g.endFill();
             
                 g.lineStyle(thickness, lineColor, 1);
             
-                for (var i:int = 0; i < coords.points.length; i++) {
-                    var pt:Object = coords.points[i];
+                for (var i:int = 0; i < coords.screenPoints.length; i++) {
+                    var sp:Object = coords.screenPoints[i];
                     if (i == 0) {
-                        g.moveTo(pt.x, pt.y);
+                        g.moveTo(sp.x, sp.y);
                     }
                     else {
-                        g.lineTo(pt.x, pt.y);
+                        g.lineTo(sp.x, sp.y);
                     }
             
                     // (Re)draw and place a marker UIComponent
                     const marker : UIComponent = UIComponent (_markerLayer.getChildAt(i));
-                    _drawMarker (marker, lineColor, thickness, coords.markerDrawRadius, pt.synthetic);
-                    _positionMarker (marker, pt);
+                    _drawMarker (marker, lineColor, thickness, coords.drawnMarkerRadius, sp.synthetic);
+                    _positionMarker (marker, sp);
                 }
             }
             
