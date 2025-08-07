@@ -25,61 +25,91 @@
         <![CDATA[
             import flash.display.Graphics;
             import mx.core.UIComponent;
+            import com.github.ciacob.flexnodal.utils.InstanceFactory;
             
-            private static const DEFAULT_PADDING : uint = 5;
+            private static const DEFAULT_PADDING:uint = 5;
+            
+            private static const DEFAULT_LAYER_COLOR:uint = 0xcccccc;
+            
+            private static const DEFAULT_CHART_BG:uint = 0xffffff;
+            
+            private static const DEFAULT_CHART_BG_ALPHA:Number = 0.8;
+            
+            private static const DEFAULT_Y_AXIS_COLOR:uint = 0x00ccff;
+            
+            private static const DEFAULT_Y_AXIS_ALPHA:Number = 0.6;
+            
+            private static const DEFAULT_X_AXIS_COLOR:uint = 0x00ffcc;
+            
+            private static const DEFAULT_X_AXIS_ALPHA:Number = 0.6;
+            
+            private static const DEFAULT_LINE_COLOR:uint = 0x000000;
+            
+            private static const DEFAULT_LINE_THICKNESS:uint = 2;
+            
+            private var bgLayer:UIComponent;
+            
+            private var chartLayer:UIComponent;
 
-            private static const DEFAULT_LAYER_COLOR : uint = 0xcccccc;
+            private var markerLayer:UIComponent;
             
-            private static const DEFAULT_CHART_BG : uint = 0xffffff;
-            
-            private static const DEFAULT_CHART_BG_ALPHA : Number = 0.8;
-            
-            private static const DEFAULT_Y_AXIS_COLOR : uint = 0x00ccff;
-            
-            private static const DEFAULT_Y_AXIS_ALPHA : Number = 0.6;
-            
-            private static const DEFAULT_X_AXIS_COLOR : uint = 0x00ffcc;
-            
-            private static const DEFAULT_X_AXIS_ALPHA : Number = 0.6;
-
-            private static const DEFAULT_LINE_COLOR : uint = 0x000000;
-
-            private static const DEFAULT_LINE_THICKNESS : uint = 2;
-            
+            // The `data` property
             private var _data:Array;
-            private var dataChanged:Boolean = false;
             
-            private var bgSprite:UIComponent;
-            private var chartSprite:UIComponent;
+            private var _dataChanged:Boolean = false;
             
             [Bindable]
             public function set data(value:Array):void {
                 if (_data !== value) {
                     _data = value;
-                    dataChanged = true;
+                    _dataChanged = true;
                     invalidateProperties();
                 }
             }
-
+            
             public function get data():Array {
                 return _data;
             }
-
-            override protected function createChildren () : void {
+            
+            // The `drawablesFactory` property
+            private var _drawablesFactory:InstanceFactory;
+            
+            private var _drawablesFactoryChanged:Boolean;
+            
+            public function get drawablesFactory():InstanceFactory {
+                return _drawablesFactory;
+            }
+            
+            public function set drawablesFactory(value:InstanceFactory):void {
+                if (_drawablesFactory !== value) {
+                    _drawablesFactory = value;
+                    _drawablesFactoryChanged = true;
+                    invalidateProperties();
+                }
+            }
+            
+            override protected function createChildren():void {
                 super.createChildren();
-
+            
                 // Create and add layers
-                bgSprite = new UIComponent();
-                chartSprite = new UIComponent();
-                addElement(bgSprite);
-                addElement(chartSprite);
+                bgLayer = new UIComponent();
+                chartLayer = new UIComponent();
+                markerLayer = new UIComponent();
+                addElement(bgLayer);
+                addElement(chartLayer);
+                addElement(markerLayer);
             }
             
             override protected function commitProperties():void {
                 super.commitProperties();
             
-                if (dataChanged) {
-                    dataChanged = false;
+                if (_dataChanged) {
+                    _dataChanged = false;
+                    invalidateDisplayList();
+                }
+            
+                if (_drawablesFactoryChanged) {
+                    _drawablesFactoryChanged = false;
                     invalidateDisplayList();
                 }
             }
@@ -126,11 +156,11 @@
                 var plotY:Number = padding + effectiveHalfMarker;
                 var plotW:Number = totalW - (padding * 2) - effectiveMarkerSize;
                 var plotH:Number = totalH - (padding * 2) - effectiveMarkerSize;
-
-                var bgX : Number = padding;
-                var bgY : Number = padding;
-                var bgW : Number = totalW - (padding * 2);
-                var bgH : Number = totalH - (padding * 2);
+            
+                var bgX:Number = padding;
+                var bgY:Number = padding;
+                var bgW:Number = totalW - (padding * 2);
+                var bgH:Number = totalH - (padding * 2);
             
                 // Synthetic start/end
                 var syntheticStart:Array = null;
@@ -189,7 +219,7 @@
              * Draws the background layers
              */
             private function _drawBackground(coords:Object):void {
-                var g:Graphics = bgSprite.graphics;
+                var g:Graphics = bgLayer.graphics;
                 g.clear();
             
                 var totalW:Number = width;
@@ -230,7 +260,7 @@
              * Draws the line chart
              */
             private function _drawChart(coords:Object):void {
-                var g:Graphics = chartSprite.graphics;
+                var g:Graphics = chartLayer.graphics;
                 g.clear();
             
                 if (!coords.points.length)
@@ -246,23 +276,52 @@
             
                 g.lineStyle(thickness, lineColor, 1);
             
-
                 for (var i:int = 0; i < coords.points.length; i++) {
                     var pt:Object = coords.points[i];
-                    if (i == 0){
+                    if (i == 0) {
                         g.moveTo(pt.x, pt.y);
-                    } else {
+                    }
+                    else {
                         g.lineTo(pt.x, pt.y);
                     }
             
-                    g.beginFill(lineColor, pt.synthetic ? 0.1 : 1);
-                    g.drawCircle(pt.x, pt.y, coords.markerDrawRadius);
-                    g.endFill();
-
-                    // Reset the line source to the last known joint (or else, the next drawing
-                    // operation would start from the last drawn marker's boundaries).
-                    g.moveTo(pt.x, pt.y);
+                    // Create and place a marker UIComponent
+                    _createMarkerForPoint(pt.x, pt.y, lineColor, thickness, coords.markerDrawRadius, pt.synthetic);
                 }
+            }
+            
+            /**
+             * Draws the control points.
+             */
+            private function _createMarkerForPoint(
+                    cx:Number, cy:Number,
+                    color:uint,
+                    thickness:Number, radius:Number, 
+                    isSynthetic:Boolean):void {
+                        
+                if (!_drawablesFactory) {
+                    return;
+                }
+            
+                // Get a recycled/new UIComponent from the factory
+                var marker:UIComponent = _drawablesFactory.giveInstance() as UIComponent;
+                if (!marker) {
+                    return;
+                }
+            
+                // Draw around origin
+                var mg:Graphics = marker.graphics;
+                mg.lineStyle(thickness, color, 1);
+                mg.beginFill(color, isSynthetic ? 0.1 : 1);
+                mg.drawCircle(0, 0, radius);
+                mg.endFill();
+            
+                // Place at exact joint coordinates
+                marker.x = cx;
+                marker.y = cy;
+            
+                // Add to chart’s display list
+                addElement(marker);
             }
         ]]>
     </fx:Script>
