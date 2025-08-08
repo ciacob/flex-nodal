@@ -28,6 +28,7 @@
             import com.github.ciacob.flexnodal.utils.InstanceFactory;
             import mx.core.UIComponent;
             import mx.core.UIComponent;
+            import com.github.ciacob.flexnodal.utils.Node;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -61,16 +62,16 @@
             private var _markerLayer:UIComponent;
             
             // List of all NODES that define this line chart.
-            // A node is a logical representation of a marker. It 
+            // A node is a logical representation of a marker. It
             // contains information about the state of that marker (e.g.,
             // whether it is currently selected, its originating values,
-            // its current screen coordinates, etc.).
-            private var _nodes:Array;
+            // etc.).
+            private var _nodes:Vector.<Node>;
             
             // -------------------
             // The `values` property
             // -------------------
-
+            
             // Holder of all raw VALUES that define this line chart.
             // Values are user-provided doublets of abstract and
             // normalized [x,y] values, e.g.:
@@ -79,7 +80,7 @@
             // The above abstractly defines a simple chart line
             // that starts and ends at the very bottom on the Y axis,
             // while climbing fully in its middle (on the X axis),
-            // thus creating a simple "hill" profile. 
+            // thus creating a simple "hill" profile.
             private var _values:Array;
             
             // Flag to raise when the client code has externally changed
@@ -110,7 +111,7 @@
             // -------------------------------
             // The `markersFactory` property
             // -------------------------------
-
+            
             // Externally injected class instance responsible for providing
             // UIComponents to represent the chart markers.
             private var _markersFactory:InstanceFactory;
@@ -203,12 +204,12 @@
             
             /**
              * Parses incoming values into nodes.
-             * Ensures that the chart always starts on `0` and ends on `1` on the 
+             * Ensures that the chart always starts on `0` and ends on `1` on the
              * X axis by adding synthetic nodes if necessary.
              * Returns the full list of resulting nodes.
              */
-            private function _proofValues(values:Array):Array {
-                var nodes:Array = [];
+            private function _proofValues(values:Array):Vector.<Node> {
+                var nodes:Vector.<Node> = new <Node>[];
             
                 if (!values || values.length == 0)
                     return nodes;
@@ -216,18 +217,18 @@
                 // Synthetic start node
                 var hasLegitStart:Boolean = (values[0][0] === 0);
                 if (!hasLegitStart) {
-                    nodes.push({nx: 0, ny: values[0][1], synthetic: true});
+                    nodes.push(new Node(0, values[0][1], true));
                 }
             
                 // Natural nodes
                 for (var i:int = 0; i < values.length; i++) {
-                    nodes.push({nx: values[i][0], ny: values[i][1], synthetic: false});
+                    nodes.push(new Node (values[i][0], values[i][1], false));
                 }
             
                 // Synthetic end node
                 var hasLegitEnd:Boolean = (values[values.length - 1][0] === 1);
                 if (!hasLegitEnd) {
-                    nodes.push({nx: 1, ny: values[values.length - 1][1], synthetic: true});
+                    nodes.push(new Node (1, values[values.length - 1][1], true));
                 }
             
                 return nodes;
@@ -237,19 +238,19 @@
              * Ensures the markers layer contains the correct number of markers.
              * No (re)drawing is done here.
              */
-            private function _provisionMarkers(list:Array, container:UIComponent):void {
-                const numNodes : uint = _nodes.length;
-
+            private function _provisionMarkers(nodes:Vector.<Node>, container:UIComponent):void {
+                const numNodes:uint = nodes.length;
+            
                 // Append
                 while (_markerLayer.numChildren < numNodes) {
                     const markerToAdd:UIComponent = markersFactory.give();
                     _markerLayer.addChild(markerToAdd);
                     // TODO: wire added marker
                 }
-
+            
                 // Trim
                 while (_markerLayer.numChildren > numNodes) {
-                    const markerToRemove : UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
+                    const markerToRemove:UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
                     // TODO: unwire marker being removed
                     markersFactory.takeBack(markerToRemove);
                 }
@@ -259,7 +260,7 @@
              * Computes pixel coordinates and chart background geometry
              * from existing nodes.
              */
-            private function _computeChartCoords(availableWidth:Number, availableHeight:Number, nodes:Array):Object {
+            private function _computeChartCoords(availableWidth:Number, availableHeight:Number, nodes:Vector.<Node>):Object {
                 if (!nodes || nodes.length == 0) {
                     return {screenPoints: [], plotsAreaX: 0, plotsAreaY: 0, plotsAreaW: 0, plotsAreaH: 0};
                 }
@@ -285,10 +286,10 @@
                 // Map normalized to pixel coords
                 var screenPoints:Array = [];
                 for (var i:int = 0; i < nodes.length; i++) {
-                    var node:Object = nodes[i];
+                    var node:Node = nodes[i];
                     var sx:Number = plotsAreaX + node.nx * plotsAreaW;
                     var sy:Number = plotsAreaY + (1 - node.ny) * plotsAreaH; // invert Y
-                    screenPoints.push({x: sx, y: sy, synthetic: node.synthetic});
+                    screenPoints.push({x: sx, y: sy, synthetic: node.isSynthetic});
                 }
             
                 return {
@@ -377,19 +378,19 @@
                     }
             
                     // (Re)draw and place a marker UIComponent
-                    const marker : UIComponent = UIComponent (_markerLayer.getChildAt(i));
-                    _drawMarker (marker, lineColor, thickness, coords.drawnMarkerRadius, sp.synthetic);
-                    _positionMarker (marker, sp);
+                    const marker:UIComponent = UIComponent(_markerLayer.getChildAt(i));
+                    _drawMarker(marker, lineColor, thickness, coords.drawnMarkerRadius, sp.synthetic);
+                    _positionMarker(marker, sp);
                 }
             }
             
             /**
              * (Re)draws the graphical representation of a marker.
              */
-            private function _drawMarker (marker : UIComponent,
-                color : uint, lineThickness : uint, circleRadius : uint,
-                isSyntheticPoint : Boolean) : void {
-
+            private function _drawMarker(marker:UIComponent,
+                    color:uint, lineThickness:uint, circleRadius:uint,
+                    isSyntheticPoint:Boolean):void {
+            
                 // Draw around origin, so that resulting graphic is anchored in its center.
                 const g:Graphics = marker.graphics;
                 g.clear();
@@ -398,15 +399,14 @@
                 g.drawCircle(0, 0, circleRadius);
                 g.endFill();
             }
-
+            
             /**
              * (Re)positions an existing marker
              */
-            private function _positionMarker (marker : UIComponent, point : Object) : void {
+            private function _positionMarker(marker:UIComponent, point:Object):void {
                 marker.x = point.x;
                 marker.y = point.y;
             }
-
         ]]>
     </fx:Script>
 </s:Group>
