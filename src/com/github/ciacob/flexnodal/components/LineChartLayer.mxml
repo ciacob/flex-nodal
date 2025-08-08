@@ -355,7 +355,7 @@
                 node.isDirty = true;
                 invalidateDisplayList();
             
-                trace(event, marker, $node(marker));
+                // trace(event, marker, $node(marker));
             
                 switch (event.type) {
                     case MouseEvent.ROLL_OVER:
