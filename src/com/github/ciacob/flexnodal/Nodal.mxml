@@ -15,20 +15,20 @@
             import mx.core.UIComponent;
 
 
-            private const _drawablesFactory : InstanceFactory = new InstanceFactory(
+            private const _drawablesFactory : InstanceFactory = new InstanceFactory (
                 UIComponent, 
                 _initDrawable, 
                 _purgeDrawable);
 
             private static function _initDrawable (drawable : UIComponent) : void {
-                // Let's see if we need this...
+                drawable.doubleClickEnabled = true;
+                drawable.useHandCursor = true;
+                drawable.buttonMode = true;
             }
 
             private static function _purgeDrawable (drawable : UIComponent) : void {
                 drawable.graphics.clear();
                 drawable.x = drawable.y = 0;
-
-                // Add more as needed...
             }
 
             private function _onPreinitialize () : void {

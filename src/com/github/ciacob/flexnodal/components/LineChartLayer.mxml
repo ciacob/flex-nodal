@@ -29,6 +29,11 @@
             import mx.core.UIComponent;
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.Node;
+            import mx.core.UIComponent;
+            import flash.events.MouseEvent;
+            import mx.core.UIComponent;
+            import flash.events.MouseEvent;
+            import mx.core.UIComponent;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -203,6 +208,43 @@
             }
             
             /**
+             * Helper, returns the corresponding node for a given marker, provided both exist
+             * and are correctly related. Returns `null` on failure.
+             */
+            private function $node(marker:UIComponent):Node {
+                if (!_nodes || !_nodes.length) {
+                    return null;
+                }
+                if (!marker || !_markerLayer || !_markerLayer.contains(marker)) {
+                    return null;
+                }
+            
+                const markerIndex:int = _markerLayer.getChildIndex(marker);
+                if (markerIndex < 0 || markerIndex >= _nodes.length) {
+                    return null;
+                };
+                return _nodes[markerIndex];
+            }
+            
+            /**
+             * Helper, returns the corresponding marker for a given node, provided both exist
+             * and are correctly related. Returns `null` on failure.
+             */
+            private function $marker(node:Node):UIComponent {
+                if (!node || !_nodes || !_nodes.length) {
+                    return null;
+                }
+                if (!_markerLayer || !_markerLayer.numChildren) {
+                    return null;
+                }
+                const nodeIndex:int = _nodes.indexOf(node);
+                if (nodeIndex < 0 || nodeIndex >= _markerLayer.numChildren) {
+                    return null;
+                }
+                return (_markerLayer.getChildAt(nodeIndex) as UIComponent);
+            }
+            
+            /**
              * Parses incoming values into nodes.
              * Ensures that the chart always starts on `0` and ends on `1` on the
              * X axis by adding synthetic nodes if necessary.
@@ -222,13 +264,13 @@
             
                 // Natural nodes
                 for (var i:int = 0; i < values.length; i++) {
-                    nodes.push(new Node (values[i][0], values[i][1], false));
+                    nodes.push(new Node(values[i][0], values[i][1], false));
                 }
             
                 // Synthetic end node
                 var hasLegitEnd:Boolean = (values[values.length - 1][0] === 1);
                 if (!hasLegitEnd) {
-                    nodes.push(new Node (1, values[values.length - 1][1], true));
+                    nodes.push(new Node(1, values[values.length - 1][1], true));
                 }
             
                 return nodes;
@@ -244,16 +286,50 @@
                 // Append
                 while (_markerLayer.numChildren < numNodes) {
                     const markerToAdd:UIComponent = markersFactory.give();
+                    _attachListeners(markerToAdd);
                     _markerLayer.addChild(markerToAdd);
-                    // TODO: wire added marker
                 }
             
                 // Trim
                 while (_markerLayer.numChildren > numNodes) {
                     const markerToRemove:UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
-                    // TODO: unwire marker being removed
+                    _detachListeners(markerToRemove);
                     markersFactory.takeBack(markerToRemove);
                 }
+            }
+            
+            /**
+             * Adds mouse listeners to given "marker" UIComponent.
+             */
+            private function _attachListeners(marker:UIComponent):void {
+                marker.addEventListener(MouseEvent.CLICK, _onMarkerHandled);
+                marker.addEventListener(MouseEvent.DOUBLE_CLICK, _onMarkerHandled);
+                marker.addEventListener(MouseEvent.ROLL_OVER, _onMarkerHandled);
+                marker.addEventListener(MouseEvent.ROLL_OUT, _onMarkerHandled);
+                marker.addEventListener(MouseEvent.MOUSE_DOWN, _onMarkerHandled);
+                marker.addEventListener(MouseEvent.MOUSE_UP, _onMarkerHandled);
+            }
+            
+            /**
+             * Removes mouse listeners previously added to given "marker" UIComponent.
+             */
+            private function _detachListeners(marker:UIComponent):void {
+                marker.removeEventListener(MouseEvent.CLICK, _onMarkerHandled);
+                marker.removeEventListener(MouseEvent.DOUBLE_CLICK, _onMarkerHandled);
+                marker.removeEventListener(MouseEvent.ROLL_OVER, _onMarkerHandled);
+                marker.removeEventListener(MouseEvent.ROLL_OUT, _onMarkerHandled);
+                marker.removeEventListener(MouseEvent.MOUSE_DOWN, _onMarkerHandled);
+                marker.removeEventListener(MouseEvent.MOUSE_UP, _onMarkerHandled);
+            }
+            
+            /**
+             * Listener, executes when a "marker" UIComponent has been interacted with
+             * via mouse.
+             */
+            private function _onMarkerHandled(event:MouseEvent):void {
+                const marker:UIComponent = event.target as UIComponent;
+            
+                trace(event, marker, $node(marker));
             }
             
             /**

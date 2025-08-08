@@ -14,6 +14,9 @@ package com.github.ciacob.flexnodal.utils {
             this.nx = nx;
             this.ny = ny;
             this.isSynthetic = isSynthetic;
+
+            // Nodes are created as "dirty" by default.
+            this.isDirty = true;
         }
 
         // "Normalized", or "logic" X-axis value of this node, unrelated to actual
@@ -39,5 +42,12 @@ package com.github.ciacob.flexnodal.utils {
         // `True` if, on the next redraw operation, this node's corresponding marker
         // should be depicted as mouse hovered (e.g., different color, etc.).
         public var isHovered:Boolean;
+
+        /**
+         * Returns a string representation of this class for debugging purposes.
+         */
+        public function toString () : String {
+            return '[' + (isSynthetic? 'Synthetic Node: ' : 'Node: ') + nx + ',' + ny + ']';
+        }
     }
 }
