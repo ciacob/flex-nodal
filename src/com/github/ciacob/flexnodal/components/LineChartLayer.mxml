@@ -5,6 +5,9 @@
 
     <fx:Metadata>
         [Style(name="lineColor", type="uint", format="Color", inherit="false")]
+        [Style(name="lineColorOver", type="uint", format="Color", inherit="false")]
+        [Style(name="lineColorSelected", type="uint", format="Color", inherit="false")]
+        
         [Style(name="lineThickness", type="Number", inherit="false")]
         
         [Style(name="padding", type="Number", inherit="false")]
@@ -34,6 +37,7 @@
             import mx.core.UIComponent;
             import flash.events.MouseEvent;
             import mx.core.UIComponent;
+            import com.github.ciacob.flexnodal.utils.SelectionManager;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -52,6 +56,10 @@
             private static const DEFAULT_X_AXIS_ALPHA:Number = 0.6;
             
             private static const DEFAULT_LINE_COLOR:uint = 0x000000;
+            
+            private static const DEFAULT_LINE_COLOR_OVER:uint = 0x003399;
+            
+            private static const DEFAULT_LINE_COLOR_SELECTED:uint = 0x006699;
             
             private static const DEFAULT_LINE_THICKNESS:uint = 2;
             
@@ -72,6 +80,9 @@
             // whether it is currently selected, its originating values,
             // etc.).
             private var _nodes:Vector.<Node>;
+
+            // The SelectionManager that manages selection for this line chart.
+            private var _selectionManager : SelectionManager;
             
             // -------------------
             // The `values` property
@@ -170,6 +181,13 @@
                 if (_valuesChanged) {
                     _valuesChanged = false;
                     _nodes = _proofValues(_values);
+
+                    if (!_selectionManager) {
+                        _selectionManager = new SelectionManager(_nodes)
+                    } else {
+                        _selectionManager.nodes = _nodes;
+                    }
+
                     _provisionMarkers(_nodes, _markerLayer);
                     invalidateDisplayList();
                 }
@@ -328,8 +346,31 @@
              */
             private function _onMarkerHandled(event:MouseEvent):void {
                 const marker:UIComponent = event.target as UIComponent;
+                const node:Node = $node(marker);
+                if (!node) {
+                    return;
+                }
+            
+                // Any touched node should be redrawn on the next cycle.
+                node.isDirty = true;
+                invalidateDisplayList();
             
                 trace(event, marker, $node(marker));
+            
+                switch (event.type) {
+                    case MouseEvent.ROLL_OVER:
+                        node.isHovered = true;
+                        break;
+                    case MouseEvent.ROLL_OUT:
+                        node.isHovered = false;
+                        break;
+                    case MouseEvent.CLICK:
+                    case MouseEvent.RIGHT_MOUSE_DOWN:
+                        if (_selectionManager.accountFor(event, node)) {
+                            invalidateDisplayList();
+                        }
+                        break;
+                }
             }
             
             /**
@@ -427,15 +468,17 @@
              * Draws the line chart
              */
             private function _drawChart(coords:Object):void {
-                var g:Graphics = _chartLayer.graphics;
+                const g:Graphics = _chartLayer.graphics;
                 g.clear();
             
                 if (!coords.screenPoints.length) {
                     return;
                 }
             
-                var lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
-                var thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
+                const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
+                const lineColorOver : uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
+                const lineColorSelected : uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
+                const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
                 // Transparent rect over chart for mouse events
                 g.beginFill(0x000000, 0.001);
@@ -445,7 +488,7 @@
                 g.lineStyle(thickness, lineColor, 1);
             
                 for (var i:int = 0; i < coords.screenPoints.length; i++) {
-                    var sp:Object = coords.screenPoints[i];
+                    const sp:Object = coords.screenPoints[i];
                     if (i == 0) {
                         g.moveTo(sp.x, sp.y);
                     }
@@ -453,10 +496,19 @@
                         g.lineTo(sp.x, sp.y);
                     }
             
-                    // (Re)draw and place a marker UIComponent
+                    // (Re)draw and place a marker UIComponent, provided it's corresponding
+                    // node is "dirty".
                     const marker:UIComponent = UIComponent(_markerLayer.getChildAt(i));
-                    _drawMarker(marker, lineColor, thickness, coords.drawnMarkerRadius, sp.synthetic);
+                    const node:Node = $node(marker);
+                    if (!node || !node.isDirty) {
+                        continue;
+                    }
+                    const nodeColor : uint = node.isSelected? lineColorSelected : node.isHovered? lineColorOver : lineColor;
+                    _drawMarker(marker, nodeColor, thickness, coords.drawnMarkerRadius, sp.synthetic);
                     _positionMarker(marker, sp);
+            
+                    // Clear "dirtiness" flag after drawing.
+                    node.isDirty = false;
                 }
             }
             
