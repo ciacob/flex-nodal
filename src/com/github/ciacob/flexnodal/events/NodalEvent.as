@@ -5,6 +5,7 @@ package com.github.ciacob.flexnodal.events {
 
         public static const PARAMETER_CHANGE:String = "parameterChange";
         public static const NODES_CHANGE:String = "nodesChange";
+        public static const SELECTION_CHANGE:String = "selectionChange";
 
         public var payload:Object;
 

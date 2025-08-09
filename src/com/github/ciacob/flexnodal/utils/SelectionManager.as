@@ -2,7 +2,6 @@ package com.github.ciacob.flexnodal.utils {
     import flash.events.MouseEvent;
 
     public class SelectionManager {
-        private var _nodes:Vector.<Node>;
 
         /**
          * Dedicated class to handle adding and removing nodes to/from the
@@ -19,6 +18,12 @@ package com.github.ciacob.flexnodal.utils {
             _nodes = nodes;
             _selectedNodes = new <Node>[];
         }
+
+        /**
+         * Storage for the received pool of available nodes. Useful for
+         * establishing selection context.
+         */
+        private var _nodes:Vector.<Node>;
 
         /**
          * Convenience storage for all the nodes currently selected,.
@@ -86,6 +91,74 @@ package com.github.ciacob.flexnodal.utils {
                 __anchorNode.isDirty = true;
                 __haveAnchorChanges = true;
             }
+        }
+
+        /**
+         * Helper. Sets selection and dirtiness flags of given `node`.
+         * @param node - Node to set the state of.
+         * @param selected - Whether to mark the node as selected.
+         *
+         * @return Returns`true` if a change in state took place, `false otherwise`.
+         */
+        private function _setState(node:Node, selected:Boolean):Boolean {
+            if (!node || node.isSelected === selected) {
+                return false;
+            }
+            node.isDirty = true;
+            node.isSelected = selected;
+            return true;
+        }
+
+        /**
+         * Given the current `_selectedNodes` after a splice at `selIndex`,
+         * returns the most reasonable replacement selection.
+         *
+         * @param list - The selection vector after removal.
+         * @param selIndex - The index where the removal occurred.
+         * @return The replacement Node, or null if none available.
+         */
+        private function _getReplacement(list:Vector.<Node>, selIndex:int):Node {
+            if (!list || list.length == 0) {
+                return null;
+            }
+            // If selIndex is still within bounds, just return that slot.
+            if (selIndex < list.length && selIndex >= 0) {
+                return list[selIndex];
+            }
+            // If selIndex was beyond the last index, return new last.
+            if (selIndex >= list.length) {
+                return list[list.length - 1];
+            }
+            // Defensive fallback — should not be hit with valid indices.
+            return null;
+        }
+
+        /**
+         * Returns the currently selected nodes, sorted by their `nx` property.
+         * DO NOT directly manipulate the selection-related properties of these
+         * Nodes! Only use the SelectionManager to handle selection.
+         */
+        public function get selectedNodes():Vector.<Node> {
+            return _selectedNodes;
+        }
+
+        /**
+         * Returns the last Node that was selected, regardless of its place in the
+         * `selectedNodes` list.
+         * DO NOT directly manipulate the selection-related properties of this Node!
+         * Only use the SelectionManager to handle selection.
+         */
+        public function get selectedNode():Node {
+            return _selectedNode;
+        }
+
+        /**
+         * Returns the last touched note, whether it was selected or not.
+         * DO NOT directly manipulate the selection-related properties of this Node!
+         * Only use the SelectionManager to handle selection.
+         */
+        public function get anchorNode():Node {
+            return _anchorNode;
         }
 
         /**
@@ -183,6 +256,7 @@ package com.github.ciacob.flexnodal.utils {
                             continue;
                         }
                         _selectedNodes.splice(selIndex, 1);
+                        _selectedNode = _getReplacement(_selectedNodes, selIndex);
                         continue;
                     }
 
@@ -190,12 +264,11 @@ package com.github.ciacob.flexnodal.utils {
                     // CTRL/CMD is irrelevant here.
                     haveChanges = _setState(rangeNode, true) || haveChanges;
                     _selectedNodes.push(rangeNode);
+                    _selectedNode = rangeNode;
                 }
-                _selectedNodes.sort(_byNx);
+                _selectedNodes.sort(Helpers.byNx);
 
-                // The current node becomes the next anchor and single 
-                // selection actor.
-                _selectedNode = currentNode;
+                // The current node becomes the next anchor.
                 _anchorNode = currentNode;
 
                 return haveChanges || _haveAnchorChanges;
@@ -210,11 +283,11 @@ package com.github.ciacob.flexnodal.utils {
                         _selectedNodes.splice(selIndex, 1);
                     }
                     _setState(currentNode, false);
-                    _selectedNode = null;
+                    _selectedNode = _getReplacement(_selectedNodes, selIndex);
                 } else {
                     _setState(currentNode, true);
                     _selectedNodes.push(currentNode);
-                    _selectedNodes.sort(_byNx);
+                    _selectedNodes.sort(Helpers.byNx);
                     _selectedNode = currentNode;
                 }
                 _anchorNode = currentNode;
@@ -244,40 +317,6 @@ package com.github.ciacob.flexnodal.utils {
             }
             _selectedNodes.length = 0;
             return haveChanges || _haveAnchorChanges;
-        }
-
-        /**
-         * Helper. Sets selection and dirtiness flags of given `node`.
-         * @param node - Node to set the state of.
-         * @param selected - Whether to mark the node as selected.
-         *
-         * @return Returns`true` if a change in state took place, `false otherwise`.
-         */
-        private function _setState(node:Node, selected:Boolean):Boolean {
-            if (!node || node.isSelected === selected) {
-                return false;
-            }
-            node.isDirty = true;
-            node.isSelected = selected;
-            return true;
-        }
-
-        /**
-         * Helper, to be used with Array/Vector `sort()`. Sorts a Nodes by their `nx`
-         * field.
-         * @see Array.sort()
-         */
-        private function _byNx(a:Node, b:Node):int {
-            if (a === b) {
-                return 0;
-            }
-            if (!a) {
-                return -1;
-            }
-            if (!b) {
-                return 1;
-            }
-            return (a.nx < b.nx) ? -1 : (a.nx > b.nx ? 1 : 0);
         }
     }
 }

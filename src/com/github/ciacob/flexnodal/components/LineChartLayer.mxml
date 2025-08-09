@@ -23,6 +23,8 @@
         
         [Style(name="xAxisColor", type="uint", format="Color", inherit="false")]
         [Style(name="xAxisAlpha", type="Number", inherit="false")]
+
+        [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
     <fx:Script>
@@ -39,6 +41,7 @@
             import flash.events.MouseEvent;
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.SelectionManager;
+            import com.github.ciacob.flexnodal.events.NodalEvent;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -166,6 +169,7 @@
                     return;
                 }
                 if (_selectionManager.clearSelection()) {
+                    _broadcastSelection();
                     invalidateDisplayList();
                 }
             }
@@ -382,10 +386,22 @@
                     case MouseEvent.CLICK:
                     case MouseEvent.RIGHT_MOUSE_DOWN:
                         if (_selectionManager.accountFor(event, node)) {
+                            _broadcastSelection();
                             invalidateDisplayList();
                         }
                         break;
                 }
+            }
+
+            /**
+             * Sends out information about the current chart selection.
+             */
+            private function _broadcastSelection () : void {
+                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_CHANGE, {
+                    selectedNodes: _selectionManager.selectedNodes,
+                    selectedNode: _selectionManager.selectedNode,
+                    anchorNode: _selectionManager.anchorNode
+                }));
             }
             
             /**
