@@ -13,6 +13,11 @@
             import mx.core.UIComponent;
             import mx.core.UIComponent;
             import mx.core.UIComponent;
+            import com.github.ciacob.flexnodal.events.NodalEvent;
+            import com.github.ciacob.flexnodal.utils.Node;
+            
+            [Bindable]
+            private var _selectedNode:Node;
             
             private const _drawablesFactory:InstanceFactory = new InstanceFactory(
                     UIComponent,
@@ -33,6 +38,10 @@
             private function _onPreinitialize():void {
             
             }
+            
+            private function _onSelectionChanged(event:NodalEvent):void {
+                _selectedNode = event.payload ? event.payload.selectedNode : null;
+            }
         ]]>
     </fx:Script>
 
@@ -47,9 +56,12 @@
             lineColorAnchor="#9000ff"
             lineThickness="3"
             markersFactory="{_drawablesFactory}"
-            values="{[ [0, 0.1], [0.5, 0.8], [0.95, 0], [1, 0] ]}"/>
+            values="{[ [0, 0.1], [0.5, 0.8], [0.95, 0], [1, 0] ]}"
+            selectionChange="_onSelectionChanged (event)"/>
 
-        <s:Button label="Clear selection" click="{chart.clearSelection()}"/>
+        <s:Button label="Clear selection"
+            enabled="{!!_selectedNode}"
+            click="{chart.clearSelection()}"/>
     </s:VGroup>
 
 </s:Group>
