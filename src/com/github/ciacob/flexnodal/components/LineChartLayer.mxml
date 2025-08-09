@@ -23,7 +23,7 @@
         
         [Style(name="xAxisColor", type="uint", format="Color", inherit="false")]
         [Style(name="xAxisAlpha", type="Number", inherit="false")]
-
+        
         [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
@@ -42,6 +42,9 @@
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.SelectionManager;
             import com.github.ciacob.flexnodal.events.NodalEvent;
+            import com.github.ciacob.flexnodal.Nodal;
+            import com.github.ciacob.flexnodal.utils.Helpers;
+            import com.github.ciacob.flexnodal.utils.Node;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -86,9 +89,9 @@
             // whether it is currently selected, its originating values,
             // etc.).
             private var _nodes:Vector.<Node>;
-
+            
             // The SelectionManager that manages selection for this line chart.
-            private var _selectionManager : SelectionManager;
+            private var _selectionManager:SelectionManager;
             
             // -------------------
             // The `values` property
@@ -160,17 +163,83 @@
                     invalidateProperties();
                 }
             }
-
-            // -----------------------------
-            // The `clearSelection` property
-            // -----------------------------
-            public function clearSelection () : void {
+            
+            /**
+             * Marks all nodes of the chart as unselected, also dispatching a
+             * `SELECTION_CHANGE` NodalEvent (opt-out).
+             *
+             * @param   dispatch
+             *          Optional, default `true`: whether to dispatch
+             *          an event for this operation.
+             */
+            public function clearSelection(dispatch:Boolean = true):void {
                 if (!_selectionManager) {
                     return;
                 }
                 if (_selectionManager.clearSelection()) {
-                    _broadcastSelection();
+                    if (dispatch) {
+                        _broadcastSelection();
+                    }
                     invalidateDisplayList();
+                }
+            }
+            
+            /**
+             * Removes all selected nodes eligible for deletion, also dispatching a
+             * `NODES_CHANGE` nodalEvent (opt-out).
+             */
+            public function deleteSelection(dispatch:Boolean = true):void {
+            
+                if (!_selectionManager || !_nodes || !_nodes.length || !_markerLayer) {
+                    return;
+                }
+                const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes;
+            
+                if (!selectedNodes || !selectedNodes.length) {
+                    return;
+                }
+            
+                const removableNodes:Vector.<Node> = new <Node>[];
+                var i:int;
+                for (i = 0; i < selectedNodes.length; i++) {
+                    const node:Node = selectedNodes[i];
+                    if (!node.isSynthetic) {
+                        removableNodes.push(node);
+                    }
+                }
+            
+                if (!removableNodes.length) {
+                    return;
+                }
+            
+                _selectionManager.clearSelection();
+                const numNodesBefore:uint = _nodes.length;
+                for each (var removable:Node in removableNodes) {
+            
+                    const idx:int = _nodes.indexOf(removable);
+                    if (idx === -1) {
+                        continue;
+                    }
+                    _nodes.splice(idx, 1);
+                    const replacement:Node = Helpers.getReplacement(_nodes, idx);
+                    if (replacement) {
+                        replacement.isDirty = true;
+                    }
+                }
+            
+                // Also mark as dirty all remaining nodes.
+                for (i = idx + 1; i < _nodes.length; i++) {
+                    _nodes[i].isDirty = true;
+                }
+            
+                if (_nodes.length != numNodesBefore) {
+                    _nodes = _proofNodes(_nodes);
+                    _provisionMarkers(_nodes, _markerLayer);
+                    invalidateDisplayList();
+                    _values = _exportNodes(_nodes);
+                    if (dispatch) {
+                        dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+                    }
                 }
             }
             
@@ -199,14 +268,15 @@
             
                 if (_valuesChanged) {
                     _valuesChanged = false;
-                    _nodes = _proofValues(_values);
-
+                    _nodes = _importValues(_values);
+            
                     if (!_selectionManager) {
-                        _selectionManager = new SelectionManager(_nodes)
-                    } else {
+                        _selectionManager = new SelectionManager(_nodes);
+                    }
+                    else {
                         _selectionManager.nodes = _nodes;
                     }
-
+            
                     _provisionMarkers(_nodes, _markerLayer);
                     invalidateDisplayList();
                 }
@@ -228,20 +298,6 @@
                 var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
                 _drawBackground(coords);
                 _drawChart(coords);
-            }
-            
-            /**
-             * Helper, reads a CSS style with a fallback value.
-             *
-             * @param name - Name of the style to read.
-             * @param fallback - Default value to assume if no style can be retrieved for given name.
-             */
-            private function _getStyle(name:String, fallback:*):* {
-                var val:* = getStyle(name);
-                if (val === undefined) {
-                    return fallback;
-                }
-                return val;
             }
             
             /**
@@ -282,32 +338,76 @@
             }
             
             /**
-             * Parses incoming values into nodes.
-             * Ensures that the chart always starts on `0` and ends on `1` on the
-             * X axis by adding synthetic nodes if necessary.
-             * Returns the full list of resulting nodes.
+             * Helper, reads a CSS style with a fallback value.
+             *
+             * @param name - Name of the style to read.
+             * @param fallback - Default value to assume if no style can be retrieved for given name.
              */
-            private function _proofValues(values:Array):Vector.<Node> {
-                var nodes:Vector.<Node> = new <Node>[];
-            
-                if (!values || values.length == 0)
-                    return nodes;
-            
-                // Synthetic start node
-                var hasLegitStart:Boolean = (values[0][0] === 0);
-                if (!hasLegitStart) {
-                    nodes.push(new Node(0, values[0][1], true));
+            private function _getStyle(name:String, fallback:*):* {
+                var val:* = getStyle(name);
+                if (val === undefined) {
+                    return fallback;
                 }
+                return val;
+            }
             
-                // Natural nodes
+            /**
+             * Converts a single Node to an [x,y] doublet. Returns null for a missing Node.
+             */
+            private function _exportNode(node:Node):Array {
+                if (!node) {
+                    return null;
+                }
+                return [node.nx, node.ny];
+            }
+            
+            /**
+             * Converts several nodes to [x,y] doublets and appends them to storage.
+             * Does nothing if missing `nodes` or `storage`.
+             */
+            private function _exportNodes(nodes:Vector.<Node>):Array {
+                const out:Array = [];
+                if (!nodes || !nodes.length) {
+                    return out;
+                }
+                for each (var node:Node in nodes) {
+                    out.push(_exportNode(node));
+                }
+                return out;
+            }
+            
+            /**
+             * Parses incoming values into nodes.
+             */
+            private function _importValues(values:Array):Vector.<Node> {
+                var nodes:Vector.<Node> = new <Node>[];
+                if (!values || values.length == 0) {
+                    return nodes;
+                }
                 for (var i:int = 0; i < values.length; i++) {
                     nodes.push(new Node(values[i][0], values[i][1], false));
                 }
+                nodes = _proofNodes(nodes);
+                return nodes;
+            }
+            
+            /**
+             * Ensures that the chart always starts on `0` and ends on `1` on the
+             * X axis by adding synthetic nodes if necessary.
+             */
+            private function _proofNodes(nodes:Vector.<Node>):Vector.<Node> {
+                // Synthetic start node
+                const firstNode:Node = nodes[0];
+                var hasLegitStart:Boolean = (firstNode && firstNode.nx === 0);
+                if (!hasLegitStart) {
+                    nodes.unshift(new Node(0, firstNode ? firstNode.ny : 0.5, true));
+                }
             
                 // Synthetic end node
-                var hasLegitEnd:Boolean = (values[values.length - 1][0] === 1);
+                const lastNode:Node = nodes[nodes.length - 1];
+                var hasLegitEnd:Boolean = (lastNode && lastNode.nx === 1);
                 if (!hasLegitEnd) {
-                    nodes.push(new Node(1, values[values.length - 1][1], true));
+                    nodes.push(new Node(1, lastNode ? lastNode.ny : 0.5, true));
                 }
             
                 return nodes;
@@ -322,6 +422,7 @@
             
                 // Append
                 while (_markerLayer.numChildren < numNodes) {
+            
                     const markerToAdd:UIComponent = markersFactory.give();
                     _attachListeners(markerToAdd);
                     _markerLayer.addChild(markerToAdd);
@@ -329,8 +430,10 @@
             
                 // Trim
                 while (_markerLayer.numChildren > numNodes) {
+            
                     const markerToRemove:UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
                     _detachListeners(markerToRemove);
+                    _markerLayer.removeChild(markerToRemove);
                     markersFactory.takeBack(markerToRemove);
                 }
             }
@@ -374,8 +477,6 @@
                 node.isDirty = true;
                 invalidateDisplayList();
             
-                // trace(event, marker, $node(marker));
-            
                 switch (event.type) {
                     case MouseEvent.ROLL_OVER:
                         node.isHovered = true;
@@ -392,16 +493,16 @@
                         break;
                 }
             }
-
+            
             /**
              * Sends out information about the current chart selection.
              */
-            private function _broadcastSelection () : void {
+            private function _broadcastSelection():void {
                 dispatchEvent(new NodalEvent(NodalEvent.SELECTION_CHANGE, {
-                    selectedNodes: _selectionManager.selectedNodes,
-                    selectedNode: _selectionManager.selectedNode,
-                    anchorNode: _selectionManager.anchorNode
-                }));
+                                selectedNodes: _exportNodes(_selectionManager.selectedNodes),
+                                selectedNode: _exportNode(_selectionManager.selectedNode),
+                                anchorNode: _exportNode(_selectionManager.anchorNode)
+                            }));
             }
             
             /**
@@ -507,9 +608,9 @@
                 }
             
                 const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
-                const lineColorOver : uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
-                const lineColorSelected : uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
-                const lineColorAnchor : uint = _getStyle("lineColorAnchor", DEFAULT_LINE_COLOR_ANCHOR);
+                const lineColorOver:uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
+                const lineColorSelected:uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
+                const lineColorAnchor:uint = _getStyle("lineColorAnchor", DEFAULT_LINE_COLOR_ANCHOR);
                 const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
                 // Transparent rect over chart for mouse events
@@ -535,8 +636,8 @@
                     if (!node || !node.isDirty) {
                         continue;
                     }
-                    const nodeBgColor : uint = node.isSelected? lineColorSelected : node.isHovered? lineColorOver : lineColor;
-                    const nodeBorderColor : uint = node.isHovered? nodeBgColor : node.isAnchor? lineColorAnchor : nodeBgColor;
+                    const nodeBgColor:uint = node.isSelected ? lineColorSelected : node.isHovered ? lineColorOver : lineColor;
+                    const nodeBorderColor:uint = node.isHovered ? nodeBgColor : node.isAnchor ? lineColorAnchor : nodeBgColor;
                     _drawMarker(marker, nodeBgColor, thickness, coords.drawnMarkerRadius, sp.synthetic, nodeBorderColor);
                     _positionMarker(marker, sp);
             
@@ -550,7 +651,7 @@
              */
             private function _drawMarker(marker:UIComponent,
                     color:uint, lineThickness:uint, circleRadius:uint,
-                    isSyntheticPoint:Boolean, borderColor: uint):void {
+                    isSyntheticPoint:Boolean, borderColor:uint):void {
             
                 // Draw around origin, so that resulting graphic is anchored in its center.
                 const g:Graphics = marker.graphics;

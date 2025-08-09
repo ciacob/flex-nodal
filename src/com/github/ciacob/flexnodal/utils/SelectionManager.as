@@ -110,30 +110,6 @@ package com.github.ciacob.flexnodal.utils {
         }
 
         /**
-         * Given the current `_selectedNodes` after a splice at `selIndex`,
-         * returns the most reasonable replacement selection.
-         *
-         * @param list - The selection vector after removal.
-         * @param selIndex - The index where the removal occurred.
-         * @return The replacement Node, or null if none available.
-         */
-        private function _getReplacement(list:Vector.<Node>, selIndex:int):Node {
-            if (!list || list.length == 0) {
-                return null;
-            }
-            // If selIndex is still within bounds, just return that slot.
-            if (selIndex < list.length && selIndex >= 0) {
-                return list[selIndex];
-            }
-            // If selIndex was beyond the last index, return new last.
-            if (selIndex >= list.length) {
-                return list[list.length - 1];
-            }
-            // Defensive fallback — should not be hit with valid indices.
-            return null;
-        }
-
-        /**
          * Returns the currently selected nodes, sorted by their `nx` property.
          * DO NOT directly manipulate the selection-related properties of these
          * Nodes! Only use the SelectionManager to handle selection.
@@ -256,7 +232,7 @@ package com.github.ciacob.flexnodal.utils {
                             continue;
                         }
                         _selectedNodes.splice(selIndex, 1);
-                        _selectedNode = _getReplacement(_selectedNodes, selIndex);
+                        _selectedNode = Helpers.getReplacement(_selectedNodes, selIndex);
                         continue;
                     }
 
@@ -283,7 +259,7 @@ package com.github.ciacob.flexnodal.utils {
                         _selectedNodes.splice(selIndex, 1);
                     }
                     _setState(currentNode, false);
-                    _selectedNode = _getReplacement(_selectedNodes, selIndex);
+                    _selectedNode = Helpers.getReplacement(_selectedNodes, selIndex);
                 } else {
                     _setState(currentNode, true);
                     _selectedNodes.push(currentNode);
