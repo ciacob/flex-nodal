@@ -17,9 +17,6 @@ package com.github.ciacob.flexnodal.utils {
          */
         public function SelectionManager(nodes:Vector.<Node>) {
             _nodes = nodes;
-
-            trace ('Nodes is: ', _nodes);
-
             _selectedNodes = new <Node>[];
         }
 
@@ -32,9 +29,64 @@ package com.github.ciacob.flexnodal.utils {
 
         /**
          * The last Node that was added to `_selectedNodes`. Useful for
-         * establishing ranges.
+         * situations where a single selection is needed.
          */
         private var _selectedNode:Node;
+
+        /**
+         * Whether at least one node should be redrawn with respect to
+         * its "anchor" appearance.
+         */
+        private var __haveAnchorChanges:Boolean;
+
+        /**
+         * Returns `true` only once after each raise of the
+         * `__haveAnchorChanges` flag. We do this in an attempt to minimize
+         * the number of unneeded redraw operations.
+         */
+        private function get _haveAnchorChanges():Boolean {
+            if (__haveAnchorChanges) {
+                __haveAnchorChanges = false;
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * The last Node that has been passed as the second argument of
+         * `accountFor`, regardless of its selected state. Useful for
+         * establishing ranges. There can be at most one anchor node per
+         * SelectionManager instance.
+         */
+        private var __anchorNode:Node;
+
+        /**
+         * Returns the last anchor set.
+         */
+        private function get _anchorNode():Node {
+            return __anchorNode;
+        }
+
+        /**
+         * Sets a new anchor. Can be `null`.
+         */
+        private function set _anchorNode(value:Node):void {
+
+            // Un-marks the previous anchor, if any.
+            if (__anchorNode && __anchorNode !== value) {
+                __anchorNode.isAnchor = false;
+                __anchorNode.isDirty = true;
+                __haveAnchorChanges = true;
+            }
+
+            // Set and mark the new anchor.
+            __anchorNode = value;
+            if (__anchorNode) {
+                __anchorNode.isAnchor = true;
+                __anchorNode.isDirty = true;
+                __haveAnchorChanges = true;
+            }
+        }
 
         /**
          * Returns the pool of nodes currently in use.
@@ -59,71 +111,74 @@ package com.github.ciacob.flexnodal.utils {
          * @param   event
          *          The mouse event to account for.
          *
-         * @param   targetNode
+         * @param   currentNode
          *          The Node instance the event's target resolves to.
          *
          * @return  Returns `true` if the event resulted in changing the current
          *          selection, `false` otherwise.
          */
-        public function accountFor(event:MouseEvent, targetNode:Node):Boolean {
-            if (!event || !targetNode) {
+        public function accountFor(event:MouseEvent, currentNode:Node):Boolean {
+            if (!event || !currentNode) {
                 return false;
             }
+
             const hasShift:Boolean = event.shiftKey;
             const hasCtrl:Boolean = (event.ctrlKey || event.commandKey);
             var selIndex:int;
 
-            // Clicking a selected node without CTRL/CMD depressed does nothing.
-            if (targetNode.isSelected && !hasCtrl) {
-                return false;
+            // Clicking a selected node without either SHIFT or CTRL/CMD
+            // depressed only changes the current anchor.
+            if (currentNode.isSelected && !hasCtrl && !hasShift) {
+                _anchorNode = currentNode;
+                return _haveAnchorChanges;
             }
 
             // Clicking a non-selected node without SHIFT depressed (or with
             // SHIFT depressed, but without an anchor) sets current selection
-            // TO that node alone. CTRL/CMD makes no difference here.
-            if (!targetNode.isSelected && (!hasShift || !_selectedNode)) {
-                clearSelection();
-                _setState(targetNode, true);
-                _selectedNode = targetNode;
-                _selectedNodes.push(targetNode);
+            // TO that node. If CTRL/CMD is not depressed, the current selection is
+            // discarded as well.
+            if (!currentNode.isSelected && (!hasShift || !_anchorNode)) {
+
+                // Without CTRL, selection is reset
+                if (!hasCtrl) {
+                    clearSelection();
+                }
+
+                // With CTRL/CMD, current selection is preserved
+                _setState(currentNode, true);
+                _selectedNode = currentNode;
+                _anchorNode = currentNode;
+                _selectedNodes.push(currentNode);
                 return true;
             }
 
-            // Clicking a non-selected node with SHIFT depressed, with and
-            // anchor, establishes a selected range. The range will be selected
-            // if CTRL/CMD is note depressed, or reversed if CTRL/CMD is depressed.
-            if (!targetNode.isSelected && hasShift && _selectedNode) {
-                trace ('targetNode is:', targetNode, 'and _selectedNode is:', _selectedNode);
-
+            // Clicking a node with SHIFT depressed, and with an anchor, establishes
+            // a range. That range will be selected when CTRL/CMD is _not_ depressed,
+            // or reversed when CTRL/CMD _is_ depressed.
+            if (hasShift && _anchorNode) {
                 var haveChanges:Boolean = false;
-                const anchorIndex:int = _nodes.indexOf(_selectedNode);
-                
-                trace ('anchorIndex is: ', anchorIndex);
-
+                const anchorIndex:int = _nodes.indexOf(_anchorNode);
                 if (anchorIndex < 0) {
                     return false;
                 }
-                const targetIndex:int = _nodes.indexOf(targetNode);
-
-                trace ('targetIndex is:', targetIndex);
-
+                const targetIndex:int = _nodes.indexOf(currentNode);
                 if (targetIndex < 0) {
                     return false;
                 }
                 const startIndex:int = Math.min(anchorIndex, targetIndex);
                 const endIndex:int = Math.max(anchorIndex, targetIndex);
                 for (var i:int = startIndex; i <= endIndex; i++) {
-                    const node:Node = _nodes[i];
+                    const rangeNode:Node = _nodes[i];
 
-                    // (a) "This" node included in the range was already selected.
-                    if (node.isSelected) {
+                    // (a) We stumbled on a range node that was already selected.
+                    if (rangeNode.isSelected) {
                         if (!hasCtrl) {
                             continue;
                         }
-                        // With CTRL selected, we "invert" a selected node, thus
-                        // unselecting it.
-                        haveChanges = _setState(node, false) || haveChanges;
-                        selIndex = _selectedNodes.indexOf(node);
+                        // With CTRL selected, we "invert" the already selected
+                        // node, thus unselecting it.
+                        haveChanges = _setState(rangeNode, false) || haveChanges;
+                        selIndex = _selectedNodes.indexOf(rangeNode);
                         if (selIndex < 0) {
                             continue;
                         }
@@ -131,36 +186,38 @@ package com.github.ciacob.flexnodal.utils {
                         continue;
                     }
 
-                    // (b) "This" node included in the range was not selected. CTRL/CMD
-                    // is irrelevant here.
-                    haveChanges = _setState(node, true) || haveChanges;
-                    _selectedNodes.push(node);
+                    // (b) We stumbled on a range node that was not selected.
+                    // CTRL/CMD is irrelevant here.
+                    haveChanges = _setState(rangeNode, true) || haveChanges;
+                    _selectedNodes.push(rangeNode);
                 }
                 _selectedNodes.sort(_byNx);
 
-                // The "target node" becomes the next anchor.
-                _selectedNode = targetNode;
+                // The current node becomes the next anchor and single 
+                // selection actor.
+                _selectedNode = currentNode;
+                _anchorNode = currentNode;
 
-                return haveChanges;
+                return haveChanges || _haveAnchorChanges;
             }
 
             // Finally, clicking on a node with only CTRL/CMD depressed "inverts"
             // its selection.
             if (hasCtrl) {
-                if (targetNode.isSelected) {
-                    selIndex = _selectedNodes.indexOf(targetNode);
+                if (currentNode.isSelected) {
+                    selIndex = _selectedNodes.indexOf(currentNode);
                     if (selIndex >= 0) {
                         _selectedNodes.splice(selIndex, 1);
                     }
-                    _setState(targetNode, false);
+                    _setState(currentNode, false);
                     _selectedNode = null;
-                }
-                else {
-                    _setState(targetNode, true);
-                    _selectedNodes.push(targetNode);
+                } else {
+                    _setState(currentNode, true);
+                    _selectedNodes.push(currentNode);
                     _selectedNodes.sort(_byNx);
-                    _selectedNode = targetNode;
+                    _selectedNode = currentNode;
                 }
+                _anchorNode = currentNode;
                 return true;
             }
 
@@ -171,16 +228,22 @@ package com.github.ciacob.flexnodal.utils {
         /**
          * Marks all nodes as not selected, and marks "dirty" all the ones that were
          * previously selected.
+         *
+         * @return  Returns`true` if at least one change in state took place,
+         *          `false otherwise`.
          */
-        public function clearSelection():void {
+        public function clearSelection():Boolean {
             _selectedNode = null;
+            _anchorNode = null;
             if (!_selectedNodes || !_selectedNodes.length) {
-                return;
+                return false;
             }
+            var haveChanges:Boolean = false;
             for each (var node:Node in _selectedNodes) {
-                _setState(node, false);
+                haveChanges = _setState(node, false) || haveChanges;
             }
             _selectedNodes.length = 0;
+            return haveChanges || _haveAnchorChanges;
         }
 
         /**
@@ -188,7 +251,7 @@ package com.github.ciacob.flexnodal.utils {
          * @param node - Node to set the state of.
          * @param selected - Whether to mark the node as selected.
          *
-         * @return Returns`true` if a change in state took place, `false otherwise`
+         * @return Returns`true` if a change in state took place, `false otherwise`.
          */
         private function _setState(node:Node, selected:Boolean):Boolean {
             if (!node || node.isSelected === selected) {

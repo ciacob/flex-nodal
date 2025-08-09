@@ -7,6 +7,7 @@
         [Style(name="lineColor", type="uint", format="Color", inherit="false")]
         [Style(name="lineColorOver", type="uint", format="Color", inherit="false")]
         [Style(name="lineColorSelected", type="uint", format="Color", inherit="false")]
+        [Style(name="lineColorAnchor", type="uint", format="Color", inherit="false")]
         
         [Style(name="lineThickness", type="Number", inherit="false")]
         
@@ -60,6 +61,8 @@
             private static const DEFAULT_LINE_COLOR_OVER:uint = 0x003399;
             
             private static const DEFAULT_LINE_COLOR_SELECTED:uint = 0x006699;
+            
+            private static const DEFAULT_LINE_COLOR_ANCHOR:uint = 0x00ffff;
             
             private static const DEFAULT_LINE_THICKNESS:uint = 2;
             
@@ -152,6 +155,18 @@
                     _markersFactory = value;
                     _markersFactoryChanged = true;
                     invalidateProperties();
+                }
+            }
+
+            // -----------------------------
+            // The `clearSelection` property
+            // -----------------------------
+            public function clearSelection () : void {
+                if (!_selectionManager) {
+                    return;
+                }
+                if (_selectionManager.clearSelection()) {
+                    invalidateDisplayList();
                 }
             }
             
@@ -478,6 +493,7 @@
                 const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
                 const lineColorOver : uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
                 const lineColorSelected : uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
+                const lineColorAnchor : uint = _getStyle("lineColorAnchor", DEFAULT_LINE_COLOR_ANCHOR);
                 const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
                 // Transparent rect over chart for mouse events
@@ -503,8 +519,9 @@
                     if (!node || !node.isDirty) {
                         continue;
                     }
-                    const nodeColor : uint = node.isSelected? lineColorSelected : node.isHovered? lineColorOver : lineColor;
-                    _drawMarker(marker, nodeColor, thickness, coords.drawnMarkerRadius, sp.synthetic);
+                    const nodeBgColor : uint = node.isSelected? lineColorSelected : node.isHovered? lineColorOver : lineColor;
+                    const nodeBorderColor : uint = node.isHovered? nodeBgColor : node.isAnchor? lineColorAnchor : nodeBgColor;
+                    _drawMarker(marker, nodeBgColor, thickness, coords.drawnMarkerRadius, sp.synthetic, nodeBorderColor);
                     _positionMarker(marker, sp);
             
                     // Clear "dirtiness" flag after drawing.
@@ -517,12 +534,12 @@
              */
             private function _drawMarker(marker:UIComponent,
                     color:uint, lineThickness:uint, circleRadius:uint,
-                    isSyntheticPoint:Boolean):void {
+                    isSyntheticPoint:Boolean, borderColor: uint):void {
             
                 // Draw around origin, so that resulting graphic is anchored in its center.
                 const g:Graphics = marker.graphics;
                 g.clear();
-                g.lineStyle(lineThickness, color, 1);
+                g.lineStyle(lineThickness, borderColor, 1);
                 g.beginFill(color, isSyntheticPoint ? 0.1 : 1);
                 g.drawCircle(0, 0, circleRadius);
                 g.endFill();

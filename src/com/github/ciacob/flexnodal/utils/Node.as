@@ -1,4 +1,5 @@
 package com.github.ciacob.flexnodal.utils {
+
     /**
      * Support class to represent a chart "node". A node is a logical representation of
      * a marker. It contains information about the state of that marker (e.g.,
@@ -10,7 +11,7 @@ package com.github.ciacob.flexnodal.utils {
      * The two are loosely bound.
      */
     public class Node {
-        public function Node(nx : Number = 0, ny: Number = 0, isSynthetic : Boolean = false) {
+        public function Node(nx:Number = 0, ny:Number = 0, isSynthetic:Boolean = false) {
             this.nx = nx;
             this.ny = ny;
             this.isSynthetic = isSynthetic;
@@ -40,14 +41,19 @@ package com.github.ciacob.flexnodal.utils {
         public var isSelected:Boolean;
 
         // `True` if, on the next redraw operation, this node's corresponding marker
+        // should be depicted as the "anchor", or "last touched" node (e.g., 
+        // different color, etc.). Aids with range selection.
+        public var isAnchor:Boolean;
+
+        // `True` if, on the next redraw operation, this node's corresponding marker
         // should be depicted as mouse hovered (e.g., different color, etc.).
         public var isHovered:Boolean;
 
         /**
          * Returns a string representation of this class for debugging purposes.
          */
-        public function toString () : String {
-            return '[' + (isSynthetic? 'Synthetic Node: ' : 'Node: ') + nx + ',' + ny + ']';
+        public function toString():String {
+            return '[' + (isSynthetic ? 'Synthetic Node: ' : 'Node: ') + nx + ',' + ny + ']';
         }
     }
 }

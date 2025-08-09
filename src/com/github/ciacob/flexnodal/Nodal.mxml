@@ -2,7 +2,7 @@
 <s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
     xmlns:s="library://ns.adobe.com/flex/spark"
     xmlns:mx="library://ns.adobe.com/flex/mx"
-    xmlns:local="com.github.ciacob.flexnodal.*" 
+    xmlns:local="com.github.ciacob.flexnodal.*"
     xmlns:components="com.github.ciacob.flexnodal.components.*"
     preinitialize="_onPreinitialize()">
 
@@ -13,36 +13,43 @@
             import mx.core.UIComponent;
             import mx.core.UIComponent;
             import mx.core.UIComponent;
-
-
-            private const _drawablesFactory : InstanceFactory = new InstanceFactory (
-                UIComponent, 
-                _initDrawable, 
-                _purgeDrawable);
-
-            private static function _initDrawable (drawable : UIComponent) : void {
+            
+            private const _drawablesFactory:InstanceFactory = new InstanceFactory(
+                    UIComponent,
+                    _initDrawable,
+                    _purgeDrawable);
+            
+            private static function _initDrawable(drawable:UIComponent):void {
                 drawable.doubleClickEnabled = true;
                 drawable.useHandCursor = true;
                 drawable.buttonMode = true;
             }
-
-            private static function _purgeDrawable (drawable : UIComponent) : void {
+            
+            private static function _purgeDrawable(drawable:UIComponent):void {
                 drawable.graphics.clear();
                 drawable.x = drawable.y = 0;
             }
-
-            private function _onPreinitialize () : void {
-                
+            
+            private function _onPreinitialize():void {
+            
             }
-
         ]]>
     </fx:Script>
 
-    <components:LineChartLayer
-        width="100%" height="100%"
-        lineColor="0xFF0000"
-        lineThickness="2"
-        markersFactory="{_drawablesFactory}"
-        values="{[ [0, 0.1], [0.5, 0.8], [0.95, 0], [1, 0] ]}"/>
+    <s:VGroup width="100%" height="100%"
+        horizontalAlign="center">
+        <components:LineChartLayer
+            id="chart"
+            width="100%" height="100%"
+            lineColor="#000d43"
+            lineColorOver="#0076bf"
+            lineColorSelected="#00c8ff"
+            lineColorAnchor="#9000ff"
+            lineThickness="3"
+            markersFactory="{_drawablesFactory}"
+            values="{[ [0, 0.1], [0.5, 0.8], [0.95, 0], [1, 0] ]}"/>
+
+        <s:Button label="Clear selection" click="{chart.clearSelection()}"/>
+    </s:VGroup>
 
 </s:Group>
