@@ -193,45 +193,44 @@
                 if (!_selectionManager || !_nodes || !_nodes.length || !_markerLayer) {
                     return;
                 }
-                const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes;
-            
+
+                const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes.concat();
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
                 }
             
-                const removableNodes:Vector.<Node> = new <Node>[];
-                var i:int;
-                for (i = 0; i < selectedNodes.length; i++) {
-                    const node:Node = selectedNodes[i];
-                    if (!node.isSynthetic) {
-                        removableNodes.push(node);
-                    }
-                }
-            
-                if (!removableNodes.length) {
-                    return;
-                }
-            
-                _selectionManager.clearSelection();
                 const numNodesBefore:uint = _nodes.length;
-                for each (var removable:Node in removableNodes) {
+                _selectionManager.clearSelection();
+                for each (var removable:Node in selectedNodes) {
+
+                    // Synthetic nodes cannot be deleted.
+                    if (removable.isSynthetic) {
+                        continue;
+                    }
             
+                    // Remove the node marked for deletion.
                     const idx:int = _nodes.indexOf(removable);
                     if (idx === -1) {
                         continue;
                     }
                     _nodes.splice(idx, 1);
+
+                    // Mark as "dirty" the node that will be associated with the now 
+                    // orphaned marker. That marker needs to be redrawn and repositioned.
                     const replacement:Node = Helpers.getReplacement(_nodes, idx);
                     if (replacement) {
                         replacement.isDirty = true;
                     }
                 }
             
-                // Also mark as dirty all remaining nodes.
-                for (i = idx + 1; i < _nodes.length; i++) {
+                // Also mark as dirty all remaining nodes, because they too will be allocated
+                // different markers that need redrawing and repositioning.
+                for (var i : int = idx + 1; i < _nodes.length; i++) {
                     _nodes[i].isDirty = true;
                 }
             
+                // If deletion was effective, restore integrity of the remaining dataset,
+                // trim the available markers, schedule a redraw, and broadcast the changes.
                 if (_nodes.length != numNodesBefore) {
                     _nodes = _proofNodes(_nodes);
                     _provisionMarkers(_nodes, _markerLayer);
