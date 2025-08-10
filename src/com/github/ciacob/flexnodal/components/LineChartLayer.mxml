@@ -193,7 +193,7 @@
                 if (!_selectionManager || !_nodes || !_nodes.length || !_markerLayer) {
                     return;
                 }
-
+            
                 const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes.concat();
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
@@ -202,7 +202,7 @@
                 const numNodesBefore:uint = _nodes.length;
                 _selectionManager.clearSelection();
                 for each (var removable:Node in selectedNodes) {
-
+            
                     // Synthetic nodes cannot be deleted.
                     if (removable.isSynthetic) {
                         continue;
@@ -214,8 +214,8 @@
                         continue;
                     }
                     _nodes.splice(idx, 1);
-
-                    // Mark as "dirty" the node that will be associated with the now 
+            
+                    // Mark as "dirty" the node that will be associated with the now
                     // orphaned marker. That marker needs to be redrawn and repositioned.
                     const replacement:Node = Helpers.getReplacement(_nodes, idx);
                     if (replacement) {
@@ -225,7 +225,7 @@
             
                 // Also mark as dirty all remaining nodes, because they too will be allocated
                 // different markers that need redrawing and repositioning.
-                for (var i : int = idx + 1; i < _nodes.length; i++) {
+                for (var i:int = idx + 1; i < _nodes.length; i++) {
                     _nodes[i].isDirty = true;
                 }
             
@@ -250,10 +250,14 @@
                 super.createChildren();
             
                 _bgLayer = new UIComponent();
-                _chartLayer = new UIComponent();
-                _markerLayer = new UIComponent();
                 addElement(_bgLayer);
+            
+                _chartLayer = new UIComponent();
+                _chartLayer.buttonMode = true;
+                _chartLayer.useHandCursor = true;
                 addElement(_chartLayer);
+            
+                _markerLayer = new UIComponent();
                 addElement(_markerLayer);
             }
             
@@ -602,45 +606,87 @@
                 const g:Graphics = _chartLayer.graphics;
                 g.clear();
             
-                if (!coords.screenPoints.length) {
+                const points:Array = coords.screenPoints;
+                if (!points || !points.length) {
                     return;
                 }
             
+                // styles
                 const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
                 const lineColorOver:uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
                 const lineColorSelected:uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
                 const lineColorAnchor:uint = _getStyle("lineColorAnchor", DEFAULT_LINE_COLOR_ANCHOR);
                 const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
-                // Transparent rect over chart for mouse events
-                g.beginFill(0x000000, 0.001);
-                g.drawRect(coords.plotsAreaX, coords.plotsAreaY, coords.plotsAreaW, coords.plotsAreaH);
-                g.endFill();
+                // 1) Draw the invisible, mouse-catch layer.
+                _drawChartLines(g, points, thickness * 4, 0, 0.001);
+
+                // 2) Draw the actual polyline.
+                _drawChartLines(g, points, thickness, lineColor);
             
-                g.lineStyle(thickness, lineColor, 1);
+                // 3) Draw and place markers whose nodes are dirty.
+                _updateMarkers(
+                        points,
+                        thickness,
+                        coords.drawnMarkerRadius,
+                        {
+                            base: lineColor,
+                            over: lineColorOver,
+                            selected: lineColorSelected,
+                            anchor: lineColorAnchor
+                        }
+                    );
+            }
             
-                for (var i:int = 0; i < coords.screenPoints.length; i++) {
-                    const sp:Object = coords.screenPoints[i];
+            /**
+             * Draws only the line path for the chart.
+             */
+            private function _drawChartLines(g:Graphics, points:Array, thickness:Number, strokeColor:uint, alpha : Number = 1):void {
+                g.lineStyle(thickness, strokeColor, alpha);
+            
+                for (var i:int = 0; i < points.length; i++) {
+                    const sp:Object = points[i];
                     if (i == 0) {
                         g.moveTo(sp.x, sp.y);
                     }
                     else {
                         g.lineTo(sp.x, sp.y);
                     }
+                }
+            }
             
-                    // (Re)draw and place a marker UIComponent, provided it's corresponding
-                    // node is "dirty".
+            /**
+             * Draw and position markers for the given points.
+             * Only redraws markers whose associated nodes are "dirty".
+             */
+            private function _updateMarkers(points:Array, thickness:Number, markerRadius:Number, colors:Object):void {
+                // Expecting colors: { base:uint, over:uint, selected:uint, anchor:uint }
+                for (var i:int = 0; i < points.length; i++) {
+                    const sp:Object = points[i];
+            
+                    // Each point uses the i-th marker
                     const marker:UIComponent = UIComponent(_markerLayer.getChildAt(i));
+            
+                    // Lookup the associated node for dirtiness/state
                     const node:Node = $node(marker);
                     if (!node || !node.isDirty) {
                         continue;
                     }
-                    const nodeBgColor:uint = node.isSelected ? lineColorSelected : node.isHovered ? lineColorOver : lineColor;
-                    const nodeBorderColor:uint = node.isHovered ? nodeBgColor : node.isAnchor ? lineColorAnchor : nodeBgColor;
-                    _drawMarker(marker, nodeBgColor, thickness, coords.drawnMarkerRadius, sp.synthetic, nodeBorderColor);
+            
+                    // Decide fill/border based on node state
+                    const nodeBgColor:uint = node.isSelected ? colors.selected
+                        : node.isHovered ? colors.over
+                        : colors.base;
+            
+                    const nodeBorderColor:uint = node.isHovered ? nodeBgColor
+                        : node.isAnchor ? colors.anchor
+                        : nodeBgColor;
+            
+                    // (Re)draw + place marker
+                    _drawMarker(marker, nodeBgColor, thickness, markerRadius, sp.synthetic, nodeBorderColor);
                     _positionMarker(marker, sp);
             
-                    // Clear "dirtiness" flag after drawing.
+                    // Clear the dirtiness flag
                     node.isDirty = false;
                 }
             }
