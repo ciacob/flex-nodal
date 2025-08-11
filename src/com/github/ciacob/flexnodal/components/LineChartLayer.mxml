@@ -358,7 +358,7 @@
              * Adds a point based on received `x` and `y` values. Returns the insertion index,
              * or `-1` on failure.
              */
-            private function _addPointAt(x:Number, y:Number):int {
+            private function _createNodeAt(x:Number, y:Number):int {
                 if (!_values || !_markerLayer || isNaN(x) || isNaN(y)) {
                     return -1;
                 }
@@ -529,7 +529,7 @@
                 const nx:Number = Math.max(0, Math.min(1, x / w));
                 const ny:Number = Math.max(0, Math.min(1, 1 - y / h));
             
-                _addPointAt(nx, ny);
+                _createNodeAt(nx, ny);
             }
             
             /**
