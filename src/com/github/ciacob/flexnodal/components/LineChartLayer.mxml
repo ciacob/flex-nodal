@@ -45,6 +45,7 @@
             import com.github.ciacob.flexnodal.Nodal;
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.Node;
+            import flash.geom.Rectangle;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -82,6 +83,10 @@
             // marker is a visual representation of a chart line joint
             // that can be interacted with (e.g., via mouse).
             private var _markerLayer:UIComponent;
+            
+            // Cache for last computed drawing coordinates, as returned by
+            // `_computeChartCoords()`.
+            private var _lastKnownCoords:Object;
             
             // List of all NODES that define this line chart.
             // A node is a logical representation of a marker. It
@@ -214,18 +219,11 @@
                         continue;
                     }
                     _nodes.splice(idx, 1);
-            
-                    // Mark as "dirty" the node that will be associated with the now
-                    // orphaned marker. That marker needs to be redrawn and repositioned.
-                    const replacement:Node = Helpers.getReplacement(_nodes, idx);
-                    if (replacement) {
-                        replacement.isDirty = true;
-                    }
                 }
             
-                // Also mark as dirty all remaining nodes, because they too will be allocated
-                // different markers that need redrawing and repositioning.
-                for (var i:int = idx + 1; i < _nodes.length; i++) {
+                // Since selection pattern can be unpredictable, it's better to just
+                // mark all nodes for redrawing and repositioning.
+                for (var i:int = 0; i < _nodes.length; i++) {
                     _nodes[i].isDirty = true;
                 }
             
@@ -255,6 +253,8 @@
                 _chartLayer = new UIComponent();
                 _chartLayer.buttonMode = true;
                 _chartLayer.useHandCursor = true;
+                _chartLayer.doubleClickEnabled = true;
+                _chartLayer.addEventListener(MouseEvent.DOUBLE_CLICK, _onChartDoubleClicked);
                 addElement(_chartLayer);
             
                 _markerLayer = new UIComponent();
@@ -298,9 +298,9 @@
             override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
                 super.updateDisplayList(unscaledWidth, unscaledHeight);
             
-                var coords:Object = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
-                _drawBackground(coords);
-                _drawChart(coords);
+                _lastKnownCoords = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
+                _drawBackground(_lastKnownCoords);
+                _drawChart(_lastKnownCoords);
             }
             
             /**
@@ -352,6 +352,54 @@
                     return fallback;
                 }
                 return val;
+            }
+            
+            /**
+             * Adds a point based on received `x` and `y` values. Returns the insertion index,
+             * or `-1` on failure.
+             */
+            private function _addPointAt(x:Number, y:Number):int {
+                if (!_values || !_markerLayer || isNaN(x) || isNaN(y)) {
+                    return -1;
+                }
+            
+                // Find the insertion point (right before the existing value)
+                // having a larger `x`).
+                var idx:int = 0;
+                var numValues:uint = _values.length;
+                var leftSibling:Array = null;
+                var rightSibling:Array = null;
+                var currVal:Array = null;
+                for (idx; idx < numValues; idx++) {
+                    currVal = _values[idx];
+                    if (currVal[0] > x) {
+                        rightSibling = currVal;
+                        if (idx > 0) {
+                            leftSibling = _values[idx - 1];
+                        }
+                        break;
+                    }
+                }
+            
+                // Try to interpolate the correct `y`, to account for imprecise
+                // clicking.
+                var adjustedY:Number = y;
+                if (leftSibling && rightSibling) {
+                    adjustedY = Helpers.interpolateYAtX(
+                            leftSibling[0], leftSibling[1],
+                            rightSibling[0], rightSibling[1],
+                            x, y
+                        );
+                }
+            
+                // Insert a new value in the dataset and rebuild the chart
+                _values.splice(idx, 0, [x, adjustedY]);
+                _nodes = _importValues(_values);
+                _selectionManager.nodes = _nodes;
+                _provisionMarkers(_nodes, _markerLayer);
+                invalidateDisplayList();
+            
+                return idx;
             }
             
             /**
@@ -466,6 +514,25 @@
             }
             
             /**
+             * Listener, executes when the chart line is double clicked.
+             */
+            private function _onChartDoubleClicked(event:MouseEvent):void {
+                if (!event || isNaN(event.localX) || isNaN(event.localY) ||
+                        !_chartLayer || !_lastKnownCoords) {
+                    return;
+                }
+            
+                const x:Number = event.localX - _lastKnownCoords.plotsAreaX;
+                const y:Number = event.localY - _lastKnownCoords.plotsAreaY;
+                const w:Number = _lastKnownCoords.plotsAreaW;
+                const h:Number = _lastKnownCoords.plotsAreaH;
+                const nx:Number = Math.max(0, Math.min(1, x / w));
+                const ny:Number = Math.max(0, Math.min(1, 1 - y / h));
+            
+                _addPointAt(nx, ny);
+            }
+            
+            /**
              * Listener, executes when a "marker" UIComponent has been interacted with
              * via mouse.
              */
@@ -488,7 +555,6 @@
                         node.isHovered = false;
                         break;
                     case MouseEvent.CLICK:
-                    case MouseEvent.RIGHT_MOUSE_DOWN:
                         if (_selectionManager.accountFor(event, node)) {
                             _broadcastSelection();
                             invalidateDisplayList();
@@ -620,7 +686,7 @@
             
                 // 1) Draw the invisible, mouse-catch layer.
                 _drawChartLines(g, points, thickness * 4, 0, 0.001);
-
+            
                 // 2) Draw the actual polyline.
                 _drawChartLines(g, points, thickness, lineColor);
             
@@ -641,7 +707,7 @@
             /**
              * Draws only the line path for the chart.
              */
-            private function _drawChartLines(g:Graphics, points:Array, thickness:Number, strokeColor:uint, alpha : Number = 1):void {
+            private function _drawChartLines(g:Graphics, points:Array, thickness:Number, strokeColor:uint, alpha:Number = 1):void {
                 g.lineStyle(thickness, strokeColor, alpha);
             
                 for (var i:int = 0; i < points.length; i++) {
@@ -678,9 +744,7 @@
                         : node.isHovered ? colors.over
                         : colors.base;
             
-                    const nodeBorderColor:uint = node.isHovered ? nodeBgColor
-                        : node.isAnchor ? colors.anchor
-                        : nodeBgColor;
+                    const nodeBorderColor:uint = node.isAnchor ? colors.anchor : nodeBgColor;
             
                     // (Re)draw + place marker
                     _drawMarker(marker, nodeBgColor, thickness, markerRadius, sp.synthetic, nodeBorderColor);

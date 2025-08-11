@@ -46,5 +46,40 @@ package com.github.ciacob.flexnodal.utils {
             return null;
         }
 
+        /**
+         * Performs linear interpolation of a Y value given an X value
+         * and two known points (x1, y1) and (x2, y2).
+         *
+         * <p>If the segment is vertical (x1 == x2) or the given X lies
+         * outside the range [x1, x2], the specified <code>fallbackY</code>
+         * is returned instead of interpolating.</p>
+         *
+         * @param x1 The X coordinate of the first point.
+         * @param y1 The Y coordinate of the first point.
+         * @param x2 The X coordinate of the second point.
+         * @param y2 The Y coordinate of the second point.
+         * @param x The X coordinate for which to interpolate a Y value.
+         * @param fallbackY The value to return if interpolation is not possible
+         *                  due to a vertical segment or extrapolation.
+         *
+         * @return The interpolated Y value, or <code>fallbackY</code> if
+         *         the calculation cannot be performed.
+         */
+        public static function interpolateYAtX(x1:Number, y1:Number, x2:Number, y2:Number, x:Number, fallbackY:Number):Number {
+            // Case 1: vertical segment
+            if (x2 == x1)
+                return fallbackY;
+
+            var t:Number = (x - x1) / (x2 - x1);
+
+            // Case 2: extrapolation
+            if (t < 0 || t > 1)
+                return fallbackY;
+
+            // Normal interpolation
+            return y1 + t * (y2 - y1);
+        }
+
+
     }
 }
