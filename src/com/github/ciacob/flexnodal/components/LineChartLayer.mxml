@@ -32,20 +32,12 @@
             import flash.display.Graphics;
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.InstanceFactory;
-            import mx.core.UIComponent;
-            import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.Node;
-            import mx.core.UIComponent;
             import flash.events.MouseEvent;
-            import mx.core.UIComponent;
-            import flash.events.MouseEvent;
-            import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.SelectionManager;
             import com.github.ciacob.flexnodal.events.NodalEvent;
-            import com.github.ciacob.flexnodal.Nodal;
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.Node;
-            import flash.geom.Rectangle;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -191,7 +183,7 @@
             
             /**
              * Removes all selected nodes eligible for deletion, also dispatching a
-             * `NODES_CHANGE` nodalEvent (opt-out).
+             * `NODES_CHANGE` NodalEvent (opt-out).
              */
             public function deleteSelection(dispatch:Boolean = true):void {
             
@@ -206,6 +198,7 @@
             
                 const numNodesBefore:uint = _nodes.length;
                 _selectionManager.clearSelection();
+                _broadcastSelection();
                 for each (var removable:Node in selectedNodes) {
             
                     // Synthetic nodes cannot be deleted.
@@ -354,10 +347,10 @@
             }
             
             /**
-             * Adds a point based on received `x` and `y` values. Returns the insertion index,
-             * or `-1` on failure.
+             * Adds a point based on received `x` and `y` values. Returns the created Node,
+             * or `null` on failure. Also dispatches a `NODES_CHANGE` NodalEvent (opt-out).
              */
-            private function _createNodeAt(x:Number, y:Number):Node {
+            private function _createNodeAt(x:Number, y:Number, dispatch:Boolean = true):Node {
                 if (!_nodes || !_markerLayer || isNaN(x) || isNaN(y)) {
                     return null;
                 }
@@ -400,8 +393,14 @@
                 for (var i:int = 0; i < _nodes.length; i++) {
                     _nodes[i].isDirty = true;
                 }
-            
                 invalidateDisplayList();
+            
+                // Broadcast the changes.
+                _values = _exportNodes(_nodes);
+                if (dispatch) {
+                    dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+                }
+            
                 return node;
             }
             
@@ -451,7 +450,7 @@
              */
             private function _proofNodes(nodes:Vector.<Node>):Vector.<Node> {
                 // Synthetic start node
-                const firstNode:Node = (nodes.length > 0)? nodes[0] : null;
+                const firstNode:Node = (nodes.length > 0) ? nodes[0] : null;
                 var hasLegitStart:Boolean = (firstNode && firstNode.nx === 0);
                 if (!hasLegitStart) {
                     nodes.unshift(new Node(0, firstNode ? firstNode.ny : 0.5, true));
@@ -568,9 +567,23 @@
                     case MouseEvent.ROLL_OUT:
                         node.isHovered = false;
                         break;
+            
+                        // Clicking a Node acts upon the existing selection.
                     case MouseEvent.CLICK:
                         if (_selectionManager.accountFor(event, node)) {
                             _broadcastSelection();
+                            invalidateDisplayList();
+                        }
+                        break;
+            
+                        // Double-clicking a synthetic node converts it to a genuine node.
+                    case MouseEvent.DOUBLE_CLICK:
+                        if (node.isSynthetic) {
+                            node.isSynthetic = false;
+                            node.isDirty = true;
+                            if (_selectionManager.accountFor(event, node)) {
+                                _broadcastSelection();        
+                            }
                             invalidateDisplayList();
                         }
                         break;

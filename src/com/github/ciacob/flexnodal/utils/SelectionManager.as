@@ -171,6 +171,12 @@ package com.github.ciacob.flexnodal.utils {
                 return false;
             }
 
+            // Clicking a synthetic node only changes the current anchor.
+            if (currentNode.isSynthetic) {
+                _anchorNode = currentNode;
+                return _haveAnchorChanges;
+            }
+
             const hasShift:Boolean = event.shiftKey;
             const hasCtrl:Boolean = (event.ctrlKey || event.commandKey);
             var selIndex:int;
