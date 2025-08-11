@@ -25,6 +25,8 @@
         [Style(name="xAxisAlpha", type="Number", inherit="false")]
         
         [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="nodesChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="layerChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
     <fx:Script>
@@ -38,6 +40,8 @@
             import com.github.ciacob.flexnodal.events.NodalEvent;
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.Node;
+            import com.github.ciacob.flexnodal.utils.ChartCoordinates;
+            import com.github.ciacob.flexnodal.utils.ScreenPoint;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -78,7 +82,7 @@
             
             // Cache for last computed drawing coordinates, as returned by
             // `_computeChartCoords()`.
-            private var _lastKnownCoords:Object;
+            private var _lastKnownCoords:ChartCoordinates;
             
             // List of all NODES that define this line chart.
             // A node is a logical representation of a marker. It
@@ -364,7 +368,7 @@
                 var currNode:Node = null;
                 for (idx; idx < numNodes; idx++) {
                     currNode = _nodes[idx];
-                    if (currNode.nx > x) {
+                    if (currNode.logicalX > x) {
                         rightSibling = currNode;
                         if (idx > 0) {
                             leftSibling = _nodes[idx - 1];
@@ -378,8 +382,8 @@
                 var adjustedY:Number = y;
                 if (leftSibling && rightSibling) {
                     adjustedY = Helpers.interpolateYAtX(
-                            leftSibling.nx, leftSibling.ny,
-                            rightSibling.nx, rightSibling.ny,
+                            leftSibling.logicalX, leftSibling.logicalY,
+                            rightSibling.logicalX, rightSibling.logicalY,
                             x, y
                         );
                 }
@@ -411,7 +415,7 @@
                 if (!node) {
                     return null;
                 }
-                return [node.nx, node.ny];
+                return [node.logicalX, node.logicalY];
             }
             
             /**
@@ -424,6 +428,10 @@
                     return out;
                 }
                 for each (var node:Node in nodes) {
+                    // We do not export synthetic nodes.
+                    if (node.isSynthetic) {
+                        continue;
+                    }
                     out.push(_exportNode(node));
                 }
                 return out;
@@ -451,16 +459,16 @@
             private function _proofNodes(nodes:Vector.<Node>):Vector.<Node> {
                 // Synthetic start node
                 const firstNode:Node = (nodes.length > 0) ? nodes[0] : null;
-                var hasLegitStart:Boolean = (firstNode && firstNode.nx === 0);
+                var hasLegitStart:Boolean = (firstNode && firstNode.logicalX === 0);
                 if (!hasLegitStart) {
-                    nodes.unshift(new Node(0, firstNode ? firstNode.ny : 0.5, true));
+                    nodes.unshift(new Node(0, firstNode ? firstNode.logicalY : 0.5, true));
                 }
             
                 // Synthetic end node
                 const lastNode:Node = nodes[nodes.length - 1];
-                var hasLegitEnd:Boolean = (lastNode && lastNode.nx === 1);
+                var hasLegitEnd:Boolean = (lastNode && lastNode.logicalX === 1);
                 if (!hasLegitEnd) {
-                    nodes.push(new Node(1, lastNode ? lastNode.ny : 0.5, true));
+                    nodes.push(new Node(1, lastNode ? lastNode.logicalY : 0.5, true));
                 }
             
                 return nodes;
@@ -582,7 +590,7 @@
                             node.isSynthetic = false;
                             node.isDirty = true;
                             if (_selectionManager.accountFor(event, node)) {
-                                _broadcastSelection();        
+                                _broadcastSelection();
                             }
                             invalidateDisplayList();
                         }
@@ -602,74 +610,67 @@
             }
             
             /**
-             * Computes pixel coordinates and chart background geometry
-             * from existing nodes.
+             * Computes pixel coordinates and chart background geometry from existing nodes.
              */
-            private function _computeChartCoords(availableWidth:Number, availableHeight:Number, nodes:Vector.<Node>):Object {
+            private function _computeChartCoords(availableWidth:Number, availableHeight:Number, nodes:Vector.<Node>):ChartCoordinates {
                 if (!nodes || nodes.length == 0) {
-                    return {screenPoints: [], plotsAreaX: 0, plotsAreaY: 0, plotsAreaW: 0, plotsAreaH: 0};
+                    return ChartCoordinates.empty();
                 }
             
                 // Styles
-                var padding:Number = _getStyle("padding", DEFAULT_PADDING);
-                var thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
+                const padding:Number = _getStyle("padding", DEFAULT_PADDING);
+                const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
-                var drawnMarkerRadius:Number = thickness * 2;
-                var actualMarkerHalf:Number = thickness * 2.5;
-                var actualMarkerSize:Number = actualMarkerHalf * 2;
+                const drawnMarkerRadius:Number = thickness * 2;
+                const actualMarkerHalf:Number = thickness * 2.5;
+                const actualMarkerSize:Number = actualMarkerHalf * 2;
             
-                var plotsAreaX:Number = padding + actualMarkerHalf;
-                var plotsAreaY:Number = padding + actualMarkerHalf;
-                var plotsAreaW:Number = availableWidth - (padding * 2) - actualMarkerSize;
-                var plotsAreaH:Number = availableHeight - (padding * 2) - actualMarkerSize;
+                const plotsAreaX:Number = padding + actualMarkerHalf;
+                const plotsAreaY:Number = padding + actualMarkerHalf;
+                const plotsAreaW:Number = availableWidth - (padding * 2) - actualMarkerSize;
+                const plotsAreaH:Number = availableHeight - (padding * 2) - actualMarkerSize;
             
-                var bgAreaX:Number = padding;
-                var bgAreaY:Number = padding;
-                var bgAreaW:Number = availableWidth - (padding * 2);
-                var bgAreaH:Number = availableHeight - (padding * 2);
+                const bgAreaX:Number = padding;
+                const bgAreaY:Number = padding;
+                const bgAreaW:Number = availableWidth - (padding * 2);
+                const bgAreaH:Number = availableHeight - (padding * 2);
             
                 // Map normalized to pixel coords
-                var screenPoints:Array = [];
+                const screenPoints:Vector.<ScreenPoint> = new <ScreenPoint>[];
                 for (var i:int = 0; i < nodes.length; i++) {
-                    var node:Node = nodes[i];
-                    var sx:Number = plotsAreaX + node.nx * plotsAreaW;
-                    var sy:Number = plotsAreaY + (1 - node.ny) * plotsAreaH; // invert Y
-                    screenPoints.push({x: sx, y: sy, synthetic: node.isSynthetic});
+                    const node:Node = nodes[i];
+                    const sx:Number = plotsAreaX + node.logicalX * plotsAreaW;
+                    const sy:Number = plotsAreaY + (1 - node.logicalY) * plotsAreaH; // invert Y
+                    screenPoints.push(new ScreenPoint(sx, sy, node.isSynthetic));
                 }
             
-                return {
-                        screenPoints: screenPoints,
-                        plotsAreaX: plotsAreaX,
-                        plotsAreaY: plotsAreaY,
-                        plotsAreaW: plotsAreaW,
-                        plotsAreaH: plotsAreaH,
-                        bgAreaX: bgAreaX,
-                        bgAreaY: bgAreaY,
-                        bgAreaW: bgAreaW,
-                        bgAreaH: bgAreaH,
-                        drawnMarkerRadius: drawnMarkerRadius
-                    };
+                return new ChartCoordinates(
+                        screenPoints,
+                        plotsAreaX, plotsAreaY, plotsAreaW, plotsAreaH,
+                        bgAreaX, bgAreaY, bgAreaW, bgAreaH,
+                        drawnMarkerRadius
+                    );
             }
             
             /**
              * Draws the background layers
              */
-            private function _drawBackground(coords:Object):void {
-                var g:Graphics = _bgLayer.graphics;
+            private function _drawBackground(coords:ChartCoordinates):void {
+                const g:Graphics = _bgLayer.graphics;
                 g.clear();
             
-                var availableW:Number = width;
-                var availableH:Number = height;
+                const availableW:Number = width;
+                const availableH:Number = height;
             
-                var layerColor:uint = _getStyle("layerColor", DEFAULT_LAYER_COLOR);
-                var chartBg:uint = _getStyle("chartBg", DEFAULT_CHART_BG);
-                var chartBgAlpha:Number = _getStyle("chartBgAlpha", DEFAULT_CHART_BG_ALPHA);
+                const layerColor:uint = _getStyle("layerColor", DEFAULT_LAYER_COLOR);
+                const chartBg:uint = _getStyle("chartBg", DEFAULT_CHART_BG);
+                const chartBgAlpha:Number = _getStyle("chartBgAlpha", DEFAULT_CHART_BG_ALPHA);
             
-                var yAxisColor:uint = _getStyle("yAxisColor", DEFAULT_Y_AXIS_COLOR);
-                var yAxisAlpha:Number = _getStyle("yAxisAlpha", DEFAULT_Y_AXIS_ALPHA);
+                const yAxisColor:uint = _getStyle("yAxisColor", DEFAULT_Y_AXIS_COLOR);
+                const yAxisAlpha:Number = _getStyle("yAxisAlpha", DEFAULT_Y_AXIS_ALPHA);
             
-                var xAxisColor:uint = _getStyle("xAxisColor", DEFAULT_X_AXIS_COLOR);
-                var xAxisAlpha:Number = _getStyle("xAxisAlpha", DEFAULT_X_AXIS_ALPHA);
+                const xAxisColor:uint = _getStyle("xAxisColor", DEFAULT_X_AXIS_COLOR);
+                const xAxisAlpha:Number = _getStyle("xAxisAlpha", DEFAULT_X_AXIS_ALPHA);
             
                 // Full layer background (padded area too)
                 g.beginFill(layerColor, 1);
@@ -695,12 +696,12 @@
             /**
              * Draws the line chart
              */
-            private function _drawChart(coords:Object):void {
+            private function _drawChart(coords:ChartCoordinates):void {
                 const g:Graphics = _chartLayer.graphics;
                 g.clear();
             
-                const points:Array = coords.screenPoints;
-                if (!points || !points.length) {
+                const points:Vector.<ScreenPoint> = coords.screenPoints;
+                if (!points || points.length == 0) {
                     return;
                 }
             
@@ -734,11 +735,12 @@
             /**
              * Draws only the line path for the chart.
              */
-            private function _drawChartLines(g:Graphics, points:Array, thickness:Number, strokeColor:uint, alpha:Number = 1):void {
+            private function _drawChartLines(g:Graphics, points:Vector.<ScreenPoint>,
+                    thickness:Number, strokeColor:uint, alpha:Number = 1):void {
                 g.lineStyle(thickness, strokeColor, alpha);
             
                 for (var i:int = 0; i < points.length; i++) {
-                    const sp:Object = points[i];
+                    const sp:ScreenPoint = points[i];
                     if (i == 0) {
                         g.moveTo(sp.x, sp.y);
                     }
@@ -752,10 +754,10 @@
              * Draw and position markers for the given points.
              * Only redraws markers whose associated nodes are "dirty".
              */
-            private function _updateMarkers(points:Array, thickness:Number, markerRadius:Number, colors:Object):void {
+            private function _updateMarkers(points:Vector.<ScreenPoint>, thickness:Number, markerRadius:Number, colors:Object):void {
                 // Expecting colors: { base:uint, over:uint, selected:uint, anchor:uint }
                 for (var i:int = 0; i < points.length; i++) {
-                    const sp:Object = points[i];
+                    const sp:ScreenPoint = points[i];
             
                     // Each point uses the i-th marker
                     const marker:UIComponent = UIComponent(_markerLayer.getChildAt(i));
@@ -770,15 +772,18 @@
                     const nodeBgColor:uint = node.isSelected ? colors.selected
                         : node.isHovered ? colors.over
                         : colors.base;
-            
                     const nodeBorderColor:uint = node.isAnchor ? colors.anchor : nodeBgColor;
             
-                    // (Re)draw + place marker
+                    // (Re)draw + place marker.
                     _drawMarker(marker, nodeBgColor, thickness, markerRadius, sp.synthetic, nodeBorderColor);
                     _positionMarker(marker, sp);
             
-                    // Clear the dirtiness flag
+                    // Clear the dirtiness flag.
                     node.isDirty = false;
+            
+                    // Let the Node know where its corresponding marker lies on the screen.
+                    node.screenX = sp.x;
+                    node.screenY = sp.y;
                 }
             }
             
@@ -801,7 +806,7 @@
             /**
              * (Re)positions an existing marker
              */
-            private function _positionMarker(marker:UIComponent, point:Object):void {
+            private function _positionMarker(marker:UIComponent, point:ScreenPoint):void {
                 marker.x = point.x;
                 marker.y = point.y;
             }

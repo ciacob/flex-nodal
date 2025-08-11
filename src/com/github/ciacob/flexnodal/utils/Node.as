@@ -12,21 +12,27 @@ package com.github.ciacob.flexnodal.utils {
      */
     public class Node {
         public function Node(nx:Number = 0, ny:Number = 0, isSynthetic:Boolean = false) {
-            this.nx = nx;
-            this.ny = ny;
+            this.logicalX = nx;
+            this.logicalY = ny;
             this.isSynthetic = isSynthetic;
 
             // Nodes are created as "dirty" by default.
             this.isDirty = true;
         }
 
-        // "Normalized", or "logic" X-axis value of this node, unrelated to actual
+        // Normalized, or "logical" X-axis value of this node, unrelated to actual
         // screen coordinates. Values are in the [0,1] range.
-        public var nx:Number;
+        public var logicalX:Number;
 
-        // "Normalized", or "logic" Y-axis value of this node, unrelated to actual
+        // Normalized, or "logic" Y-axis value of this node, unrelated to actual
         // screen coordinates. Values are in the [0,1] range.
-        public var ny:Number;
+        public var logicalY:Number;
+
+        // Last known X screen coordinate of this Node's corresponding marker.
+        public var screenX:Number;
+
+        // Last known Y screen coordinate of this Node's corresponding marker.
+        public var screenY:Number;
 
         // `True` if this node has been automatically added to the left and/or right
         // of an incomplete chart dataset (a dataset not starting and/or ending at
@@ -53,7 +59,7 @@ package com.github.ciacob.flexnodal.utils {
          * Returns a string representation of this class for debugging purposes.
          */
         public function toString():String {
-            return '[' + (isSynthetic ? 'Synthetic Node: ' : 'Node: ') + nx + ',' + ny + ']';
+            return '[' + (isSynthetic ? 'Synthetic Node: ' : 'Node: ') + logicalX + ',' + logicalY + ']';
         }
     }
 }

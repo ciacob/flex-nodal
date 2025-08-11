@@ -11,6 +11,7 @@
             import com.github.ciacob.flexnodal.utils.InstanceFactory;
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.events.NodalEvent;
+            import com.github.ciacob.flexnodal.events.NodalEvent;
             
             [Bindable]
             private var _selectedNode:Array;
@@ -37,7 +38,11 @@
             
             private function _onSelectionChanged(event:NodalEvent):void {
                 _selectedNode = event.payload ? event.payload.selectedNode : null;
-                trace ('--> selection info:\n', JSON.stringify (event.payload, null, '\t'));
+                trace ('--> selection info:\n', JSON.stringify (event.payload));
+            }
+
+            private function _onNodesChanged (event : NodalEvent) : void {
+                trace ('==> chart values:', chart.values? '[' + chart.values.join('] [') + ']' : 'NULL');
             }
         ]]>
     </fx:Script>
@@ -54,7 +59,8 @@
             lineThickness="3"
             markersFactory="{_drawablesFactory}"
             values="{[ [0, 0.1], [0.5, 0.8], [0.95, 0], [1, 0] ]}"
-            selectionChange="_onSelectionChanged (event)"/>
+            selectionChange="_onSelectionChanged (event)"
+            nodesChange="_onNodesChanged (event)"/>
 
     <s:HGroup>
         <s:Button label="Clear selection"

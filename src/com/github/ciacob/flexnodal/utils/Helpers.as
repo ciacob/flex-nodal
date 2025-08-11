@@ -19,7 +19,7 @@ package com.github.ciacob.flexnodal.utils {
             if (!b) {
                 return 1;
             }
-            return (a.nx < b.nx) ? -1 : (a.nx > b.nx ? 1 : 0);
+            return (a.logicalX < b.logicalX) ? -1 : (a.logicalX > b.logicalX ? 1 : 0);
         }
 
         /**
