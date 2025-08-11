@@ -221,8 +221,7 @@
                     _nodes.splice(idx, 1);
                 }
             
-                // Since selection pattern can be unpredictable, it's better to just
-                // mark all nodes for redrawing and repositioning.
+                // Mark all nodes for redrawing and repositioning.
                 for (var i:int = 0; i < _nodes.length; i++) {
                     _nodes[i].isDirty = true;
                 }
@@ -358,24 +357,24 @@
              * Adds a point based on received `x` and `y` values. Returns the insertion index,
              * or `-1` on failure.
              */
-            private function _createNodeAt(x:Number, y:Number):int {
-                if (!_values || !_markerLayer || isNaN(x) || isNaN(y)) {
-                    return -1;
+            private function _createNodeAt(x:Number, y:Number):Node {
+                if (!_nodes || !_markerLayer || isNaN(x) || isNaN(y)) {
+                    return null;
                 }
             
                 // Find the insertion point (right before the existing value)
-                // having a larger `x`).
+                // having a larger `x`). Does not touch selection.
                 var idx:int = 0;
-                var numValues:uint = _values.length;
-                var leftSibling:Array = null;
-                var rightSibling:Array = null;
-                var currVal:Array = null;
-                for (idx; idx < numValues; idx++) {
-                    currVal = _values[idx];
-                    if (currVal[0] > x) {
-                        rightSibling = currVal;
+                var numNodes:uint = _nodes.length;
+                var leftSibling:Node = null;
+                var rightSibling:Node = null;
+                var currNode:Node = null;
+                for (idx; idx < numNodes; idx++) {
+                    currNode = _nodes[idx];
+                    if (currNode.nx > x) {
+                        rightSibling = currNode;
                         if (idx > 0) {
-                            leftSibling = _values[idx - 1];
+                            leftSibling = _nodes[idx - 1];
                         }
                         break;
                     }
@@ -386,20 +385,24 @@
                 var adjustedY:Number = y;
                 if (leftSibling && rightSibling) {
                     adjustedY = Helpers.interpolateYAtX(
-                            leftSibling[0], leftSibling[1],
-                            rightSibling[0], rightSibling[1],
+                            leftSibling.nx, leftSibling.ny,
+                            rightSibling.nx, rightSibling.ny,
                             x, y
                         );
                 }
             
                 // Insert a new value in the dataset and rebuild the chart
-                _values.splice(idx, 0, [x, adjustedY]);
-                _nodes = _importValues(_values);
-                _selectionManager.nodes = _nodes;
+                const node:Node = new Node(x, adjustedY);
+                _nodes.splice(idx, 0, node);
                 _provisionMarkers(_nodes, _markerLayer);
-                invalidateDisplayList();
             
-                return idx;
+                // Mark all nodes for redrawing and repositioning.
+                for (var i:int = 0; i < _nodes.length; i++) {
+                    _nodes[i].isDirty = true;
+                }
+            
+                invalidateDisplayList();
+                return node;
             }
             
             /**
@@ -448,7 +451,7 @@
              */
             private function _proofNodes(nodes:Vector.<Node>):Vector.<Node> {
                 // Synthetic start node
-                const firstNode:Node = nodes[0];
+                const firstNode:Node = (nodes.length > 0)? nodes[0] : null;
                 var hasLegitStart:Boolean = (firstNode && firstNode.nx === 0);
                 if (!hasLegitStart) {
                     nodes.unshift(new Node(0, firstNode ? firstNode.ny : 0.5, true));
@@ -522,6 +525,7 @@
                     return;
                 }
             
+                // Resolve screen coordinates to logic coordinates.
                 const x:Number = event.localX - _lastKnownCoords.plotsAreaX;
                 const y:Number = event.localY - _lastKnownCoords.plotsAreaY;
                 const w:Number = _lastKnownCoords.plotsAreaW;
@@ -529,7 +533,17 @@
                 const nx:Number = Math.max(0, Math.min(1, x / w));
                 const ny:Number = Math.max(0, Math.min(1, 1 - y / h));
             
-                _createNodeAt(nx, ny);
+                // Create the new node.
+                const node:Node = _createNodeAt(nx, ny);
+            
+                // Integrate the newly created node in the existing selection.
+                // The SHIFT/CTRL/CMD modifiers work the same way they do when
+                // selecting nodes.
+                if (node && _selectionManager) {
+                    _selectionManager.accountFor(event, node);
+                    _broadcastSelection();
+                    invalidateDisplayList();
+                }
             }
             
             /**
