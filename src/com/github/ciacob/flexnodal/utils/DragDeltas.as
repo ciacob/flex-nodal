@@ -4,14 +4,14 @@ package com.github.ciacob.flexnodal.utils {
      * Support class to represent the boundaries marker dragging
      * operations must be confined to.
      */
-    public class DragBounds {
+    public class DragDeltas {
 
         public var leftDelta:int;
         public var topDelta:int;
         public var rightDelta:int;
         public var bottomDelta:int;
 
-        public function DragBounds(
+        public function DragDeltas(
                 leftDelta:int,
                 topDelta:int,
                 rightDelta:int,
