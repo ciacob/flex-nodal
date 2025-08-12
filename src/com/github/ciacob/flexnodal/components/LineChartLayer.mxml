@@ -42,6 +42,7 @@
             import com.github.ciacob.flexnodal.utils.Node;
             import com.github.ciacob.flexnodal.utils.ChartCoordinates;
             import com.github.ciacob.flexnodal.utils.ScreenPoint;
+            import com.github.ciacob.flexnodal.utils.DragBounds;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -83,6 +84,10 @@
             // Cache for last computed drawing coordinates, as returned by
             // `_computeChartCoords()`.
             private var _lastKnownCoords:ChartCoordinates;
+            
+            // Cache for last computed drag boundaries, as returned by
+            // `_computeDragBounds()`.
+            private var _lastKnownDragBounds:DragBounds;
             
             // List of all NODES that define this line chart.
             // A node is a logical representation of a marker. It
@@ -180,6 +185,7 @@
                 if (_selectionManager.clearSelection()) {
                     if (dispatch) {
                         _broadcastSelection();
+                        _lastKnownDragBounds = _computeDragBounds();
                     }
                     invalidateDisplayList();
                 }
@@ -203,6 +209,7 @@
                 const numNodesBefore:uint = _nodes.length;
                 _selectionManager.clearSelection();
                 _broadcastSelection();
+                _lastKnownDragBounds = _computeDragBounds();
                 for each (var removable:Node in selectedNodes) {
             
                     // Synthetic nodes cannot be deleted.
@@ -549,6 +556,7 @@
                 if (node && _selectionManager) {
                     _selectionManager.accountFor(event, node);
                     _broadcastSelection();
+                    _lastKnownDragBounds = _computeDragBounds();
                     invalidateDisplayList();
                 }
             }
@@ -580,6 +588,7 @@
                     case MouseEvent.CLICK:
                         if (_selectionManager.accountFor(event, node)) {
                             _broadcastSelection();
+                            _lastKnownDragBounds = _computeDragBounds();
                             invalidateDisplayList();
                         }
                         break;
@@ -591,6 +600,7 @@
                             node.isDirty = true;
                             if (_selectionManager.accountFor(event, node)) {
                                 _broadcastSelection();
+                                _lastKnownDragBounds = _computeDragBounds();
                             }
                             invalidateDisplayList();
                         }
@@ -607,6 +617,101 @@
                                 selectedNode: _exportNode(_selectionManager.selectedNode),
                                 anchorNode: _exportNode(_selectionManager.anchorNode)
                             }));
+            }
+            
+            /**
+             * Computes selected markers' maximum drag boundaries, as top, bottom, right and left
+             * deltas from the center of the least mobile marker among the selected ones.
+             * Note: first and last markers can only move vertically.
+             */
+            private function _computeDragBounds():DragBounds {
+                if (!_lastKnownCoords ||
+                        !_nodes || !_nodes.length ||
+                        !_selectionManager || !_selectionManager.selectedNodes ||
+                        !_selectionManager.selectedNodes.length) {
+                    return null;
+                }
+            
+                const selNodes:Vector.<Node> = _selectionManager.selectedNodes;
+                const numSelNodes:uint = selNodes.length;
+                const numNodes:uint = _nodes.length;
+            
+                var leftDelta:Number;
+                var topDelta:Number;
+                var rightDelta:Number;
+                var bottomDelta:Number;
+                for (var i:int = 0; i < numSelNodes; i++) {
+                    const selNode:Node = selNodes[i];
+                    var ld:Number;
+                    var td:Number;
+                    var rd:Number;
+                    var bd:Number;
+            
+                    // GENERICS
+                    // No Node's marker should ever be dragged outside the plotting area boundaries.
+            
+                    // Left delta, negative: we favor GREATER values for less movement.
+                    ld = _lastKnownCoords.plotsAreaX - selNode.screenX;
+                    if (isNaN(leftDelta) || leftDelta < ld) {
+                        leftDelta = ld;
+                    }
+            
+                    // Top delta, negative: we favor GREATER values for less movement.
+                    td = _lastKnownCoords.plotsAreaY - selNode.screenY;
+                    if (isNaN(topDelta) || topDelta < td) {
+                        topDelta = td;
+                    }
+            
+                    // Right delta, positive: we favor SMALLER values for less movement.
+                    rd = _lastKnownCoords.plotsAreaX + _lastKnownCoords.plotsAreaW - selNode.screenX;
+                    if (isNaN(rightDelta) || rightDelta > rd) {
+                        rightDelta = rd;
+                    }
+            
+                    // Bottom delta, positive: we favor SMALLER values for less movement.
+                    bd = _lastKnownCoords.plotsAreaY + _lastKnownCoords.plotsAreaH - selNode.screenY;
+                    if (isNaN(bottomDelta) || bottomDelta > bd) {
+                        bottomDelta = bd;
+                    }
+            
+                    // SPECIFICS
+            
+                    // Identify the selected Node in the full dataset.
+                    const nodeIndex:int = _nodes.indexOf(selNode);
+                    if (nodeIndex === -1) {
+                        continue;
+                    }
+            
+                    // First and last Nodes's markers can only move vertically.
+                    // If selection includes any of these, we are practically locked on the Y axis.
+                    if (nodeIndex == 0 || nodeIndex == numNodes - 1) {
+                        leftDelta = rightDelta = 0;
+                    }
+                    else {
+                        // No selected Node's marker should be dragged cross an unselected sibling
+                        // Node's marker (except for synthetic Nodes, which can be safely run over to
+                        // practically convert them to genuine nodes).
+                        const leftSibling:Node = _nodes[nodeIndex - 1];
+                        if (!leftSibling.isSynthetic && !leftSibling.isSelected) {
+                            ld = leftSibling.screenX - selNode.screenX;
+                            if (leftDelta < ld) {
+                                leftDelta = ld;
+                            }
+                        }
+            
+                        const rightSibling:Node = _nodes[nodeIndex + 1];
+                        if (!rightSibling.isSynthetic && !rightSibling.isSelected) {
+                            rd = rightSibling.screenX - selNode.screenX;
+                            if (rightDelta > rd) {
+                                rightDelta = rd;
+                            }
+                        }
+                    }
+                }
+            
+                const bounds : DragBounds =  new DragBounds (leftDelta, topDelta, rightDelta, bottomDelta);
+                trace (bounds);
+                return bounds;
             }
             
             /**
