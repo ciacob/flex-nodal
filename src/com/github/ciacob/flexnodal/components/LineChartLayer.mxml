@@ -47,6 +47,7 @@
             import flash.events.MouseEvent;
             import flash.events.MouseEvent;
             import flash.geom.Rectangle;
+            import com.github.ciacob.flexnodal.utils.ScreenPoint;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -89,6 +90,10 @@
             // `_computeChartCoords()`.
             private var _lastKnownCoords:ChartCoordinates;
             
+            // Flag to raise when the dragging boundaries have (likely)
+            // changed and they need to be recomputed.
+            private var _dragBoundsChanged:Boolean;
+            
             // Cache for last computed drag boundaries, as returned by
             // `_computeDragBounds()`.
             private var _lastKnownDragBounds:DragDeltas;
@@ -107,13 +112,17 @@
             private var _nowDragging:Boolean;
             
             // Storage for the offset between the grabbing spot and the anchor
-            // point of the marker being dragged.
+            // point of the marker being dragged, in stage coordinates.
             private var _dragClickOffset:Point;
             
             // Storage for the screen X,Y of the marker dragging was started
             // from. Together with `_dragClickOffset` helps establishing a
             // dragging delta.
             private var _dragOrigin:Point;
+            
+            // Deep clone of the last known screen points, to use when computing
+            // new points based on the dragging delta.
+            private var _oldScreenPoints:Vector.<ScreenPoint>;
             
             // -------------------
             // The `values` property
@@ -201,7 +210,7 @@
                 if (_selectionManager.clearSelection()) {
                     if (dispatch) {
                         _broadcastSelection();
-                        _lastKnownDragBounds = _computeDragBounds();
+                        _dragBoundsChanged = true;
                     }
                     invalidateDisplayList();
                 }
@@ -225,7 +234,7 @@
                 const numNodesBefore:uint = _nodes.length;
                 _selectionManager.clearSelection();
                 _broadcastSelection();
-                _lastKnownDragBounds = _computeDragBounds();
+                _dragBoundsChanged = true;
                 for each (var removable:Node in selectedNodes) {
             
                     // Synthetic nodes cannot be deleted.
@@ -320,6 +329,12 @@
                 _lastKnownCoords = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
                 _drawBackground(_lastKnownCoords);
                 _drawChart(_lastKnownCoords);
+            
+                // Update dragging boundaries if needed.
+                if (_dragBoundsChanged) {
+                    _dragBoundsChanged = false;
+                    _lastKnownDragBounds = _computeDragBounds();
+                }
             }
             
             /**
@@ -572,7 +587,7 @@
                 if (node && _selectionManager) {
                     _selectionManager.accountFor(event, node);
                     _broadcastSelection();
-                    _lastKnownDragBounds = _computeDragBounds();
+                    _dragBoundsChanged = true;
                     invalidateDisplayList();
                 }
             }
@@ -604,7 +619,7 @@
                     case MouseEvent.CLICK:
                         if (_selectionManager.accountFor(event, node)) {
                             _broadcastSelection();
-                            _lastKnownDragBounds = _computeDragBounds();
+                            _dragBoundsChanged = true;
                             invalidateDisplayList();
                         }
                         break;
@@ -616,7 +631,7 @@
                             node.isDirty = true;
                             if (_selectionManager.accountFor(event, node)) {
                                 _broadcastSelection();
-                                _lastKnownDragBounds = _computeDragBounds();
+                                _dragBoundsChanged = true;
                             }
                             invalidateDisplayList();
                         }
@@ -626,38 +641,55 @@
                     case MouseEvent.MOUSE_DOWN:
                         if (!stage ||
                                 node.isSynthetic ||
-                                !node.isSelected ||
                                 isNaN(node.screenX) ||
-                                isNaN(node.screenY)) {
+                                isNaN(node.screenY) ||
+                                !_lastKnownCoords) {
                             return;
                         }
             
-                        trace('---> MOUSE DOWN', node, node.screenX, node.screenY);
+                        // A mouse down on an unselected node with no modifiers depressed will be routed
+                        // through the selection manager. This allows the user to drag an unselected node
+                        // in one click, without having to select it first.
+                        const noModifiers:Boolean = (!event.shiftKey && !event.ctrlKey && !event.commandKey);
+                        if (!node.isSelected && noModifiers) {
+                            if (_selectionManager.accountFor(event, node)) {
+                                _broadcastSelection();
+                                _dragBoundsChanged = true;
+                                invalidateDisplayList();
+                            }
+                        }
             
+                        // Compute `_dragClickOffset`, i.e., the X,Y values needed to convert
+                        // the local mouse coordinates to stage coordinates.
                         const bounds:Rectangle = getBounds(stage);
-            
-                        trace('bounds: ---> ', bounds);
-            
                         if (!_dragClickOffset) {
                             _dragClickOffset = new Point;
                         }
                         _dragClickOffset.x = event.localX + bounds.x;
                         _dragClickOffset.y = event.localY + bounds.y;
             
-                        trace('_dragClickOffset -->', _dragClickOffset);
-            
+                        // Save the point where dragging begun. We'll use it later to compute
+                        // a delta, as mouse moves.
                         if (!_dragOrigin) {
                             _dragOrigin = new Point;
                         }
                         _dragOrigin.x = node.screenX;
                         _dragOrigin.y = node.screenY;
             
-                        trace('_dragOrigin ---> ', _dragOrigin);
+                        // Make an immutable snapshot of the current marker's screen points.
+                        // We'll need that later to compute the new coordinates, while
+                        // dragging.
+                        _oldScreenPoints = _lastKnownCoords.cloneScreenPoints();
             
-                        stage.addEventListener(MouseEvent.MOUSE_MOVE, _onStageMouseMove);
-                        stage.addEventListener(MouseEvent.MOUSE_UP, onStageMouseUp);
-                        _nowDragging = true;
-            
+                        // Transfer event listening to the Stage, to minimize the number
+                        // of times it fires.
+                        stage.addEventListener(MouseEvent.MOUSE_MOVE, _onStageMouseMove, true);
+                        stage.addEventListener(MouseEvent.MOUSE_UP, _onStageMouseUp);
+                        if (noModifiers) {
+                            mouseChildren = false;
+                            mouseEnabled = false;
+                            _nowDragging = true;
+                        }
                         break;
                 }
             }
@@ -669,10 +701,12 @@
             private function _onStageMouseMove(event:MouseEvent):void {
                 if (!_nowDragging ||
                         !event || isNaN(event.stageX) || isNaN(event.stageY) ||
-                        !_lastKnownDragBounds || !_lastKnownCoords ||
-                        !_selectionManager) {
+                        !_lastKnownDragBounds || !_oldScreenPoints ||
+                        !_selectionManager ||
+                        !_nodes || !_nodes.length) {
                     return;
                 }
+            
                 const selNodes:Vector.<Node> = _selectionManager.selectedNodes;
                 if (!selNodes) {
                     return;
@@ -682,45 +716,70 @@
                     return;
                 }
             
-                // Compute raw dragging delta.
-                const x:Number = event.stageX - _dragClickOffset.x;
-                const y:Number = event.stageY - _dragClickOffset.y;
-                
-                const screenPoints:Vector.<ScreenPoint> = _lastKnownCoords.screenPoints;
-                var xDelta:Number = x - _dragOrigin.x;
-                var yDelta:Number = y - _dragOrigin.y;
-            
-                // Clamp it to the permitted delta.
+                // Compute dragging delta and clamp it to the permitted dragging bounds.
+                const chartX:Number = event.stageX - _dragClickOffset.x;
+                const chartY:Number = event.stageY - _dragClickOffset.y;
+                var xDelta:Number = chartX - _dragOrigin.x;
+                var yDelta:Number = chartY - _dragOrigin.y;
                 xDelta = Math.max(_lastKnownDragBounds.leftDelta, Math.min(_lastKnownDragBounds.rightDelta, xDelta));
                 yDelta = Math.max(_lastKnownDragBounds.topDelta, Math.min(_lastKnownDragBounds.bottomDelta, yDelta));
             
-                // Apply delta to all selected nodes and redraw.
+                // Apply delta to all selected nodes, without computing logical values (we'll
+                // do that when dragging is done).
+                const currentScreenPoints:Vector.<ScreenPoint> = _lastKnownCoords.screenPoints;
                 for (var i:int = 0; i < numSelNodes; i++) {
                     const selNode:Node = selNodes[i];
-                    const lx:Number = Math.max(0, Math.min(1, (selNode.screenX + xDelta) / _lastKnownCoords.plotsAreaW));
-                    const ly:Number = Math.max(0, Math.min(1, 1 - (selNode.screenY + yDelta) / _lastKnownCoords.plotsAreaH));
-
-                    selNode.logicalX = lx;
-                    selNode.logicalY = ly;
-            
-                    trace('---> lx, ly', lx, ly);
-            
+                    const selNodeIdx:int = _nodes.indexOf(selNode);
+                    if (selNodeIdx === -1) {
+                        continue;
+                    }
+                    if (selNodeIdx >= currentScreenPoints.length) {
+                        continue;
+                    }
+                    const screenPoint:ScreenPoint = currentScreenPoints[selNodeIdx];
+                    screenPoint.x = _oldScreenPoints[selNodeIdx].x + xDelta;
+                    screenPoint.y = _oldScreenPoints[selNodeIdx].y + yDelta;
                     selNode.isDirty = true;
                 }
-                invalidateDisplayList();
+            
+                _drawChart(_lastKnownCoords);
             }
             
             /**
-             * Triggered when mouse is being release anywhere over the stage,
+             * Triggered when mouse is being released anywhere over the stage,
              * to indicate the end of a dragging operation.
              */
-            private function onStageMouseUp(event:MouseEvent):void {
-                if (!_nowDragging) {
+            private function _onStageMouseUp(event:MouseEvent):void {
+                if (!_nowDragging || !_lastKnownCoords || !_nodes || !_nodes.length) {
                     return;
                 }
-                stage.removeEventListener(MouseEvent.MOUSE_MOVE, _onStageMouseMove);
-                stage.removeEventListener(MouseEvent.MOUSE_UP, onStageMouseUp);
+            
+                // Remove stage listening and make the chart interactive again
+                stage.removeEventListener(MouseEvent.MOUSE_MOVE, _onStageMouseMove, true);
+                stage.removeEventListener(MouseEvent.MOUSE_UP, _onStageMouseUp);
                 _nowDragging = false;
+                mouseChildren = true;
+                mouseEnabled = true;
+            
+                // Convert the new coordinates markers were dragged to into logical points,
+                // and export them.
+                const currentScreenPoints:Vector.<ScreenPoint> = _lastKnownCoords.screenPoints;
+                for (var i:int = 0; i < _nodes.length; i++) {
+                    const node:Node = _nodes[i];
+                    const screenPoint:ScreenPoint = currentScreenPoints[i];
+                    const lx:Number = (screenPoint.x - _lastKnownCoords.plotsAreaX) / _lastKnownCoords.plotsAreaW;
+                    node.logicalX = Math.max(0, Math.min(1, lx));
+                    const ly:Number = 1 - ((screenPoint.y - _lastKnownCoords.plotsAreaY) / _lastKnownCoords.plotsAreaH);
+                    node.logicalY = Math.max(0, Math.min(1, ly));
+                }
+                _values = _exportNodes(_nodes);
+                dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+            
+                // Recompute the dragging bounds based on the (likely changed) node values.
+                _dragBoundsChanged = true;
+            
+                // Redraw the chart (sanity check)
+                invalidateDisplayList();
             }
             
             /**
@@ -751,16 +810,16 @@
                 const numSelNodes:uint = selNodes.length;
                 const numNodes:uint = _nodes.length;
             
-                var leftDelta:Number;
-                var topDelta:Number;
-                var rightDelta:Number;
-                var bottomDelta:Number;
+                var leftDelta:Number = NaN;
+                var topDelta:Number = NaN;
+                var rightDelta:Number = NaN;
+                var bottomDelta:Number = NaN;
                 for (var i:int = 0; i < numSelNodes; i++) {
                     const selNode:Node = selNodes[i];
-                    var ld:Number;
-                    var td:Number;
-                    var rd:Number;
-                    var bd:Number;
+                    var ld:Number = 0;
+                    var td:Number = 0;
+                    var rd:Number = 0;
+                    var bd:Number = 0;
             
                     // GENERICS
                     // No Node's marker should ever be dragged outside the plotting area boundaries.
@@ -823,9 +882,7 @@
                         }
                     }
                 }
-            
                 const bounds:DragDeltas = new DragDeltas(leftDelta, topDelta, rightDelta, bottomDelta);
-                trace(bounds);
                 return bounds;
             }
             
@@ -925,7 +982,7 @@
                     return;
                 }
             
-                // styles
+                // Styles
                 const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
                 const lineColorOver:uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
                 const lineColorSelected:uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
