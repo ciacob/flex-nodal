@@ -14,5 +14,10 @@ package com.github.ciacob.flexnodal.utils {
             this.y = y;
             this.synthetic = synthetic;
         }
+
+        public function toString():String {
+            const info:Array = [x, y, synthetic ? "S" : "G"];
+            return "[" + info.join(',') + ']';
+        }
     }
 }

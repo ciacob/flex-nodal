@@ -19,12 +19,7 @@ package com.github.ciacob.flexnodal.utils {
 
         public var drawnMarkerRadius:Number;
 
-        public function ChartCoordinates(
-            screenPoints:Vector.<ScreenPoint>,
-            plotsAreaX:Number, plotsAreaY:Number, plotsAreaW:Number, plotsAreaH:Number,
-            bgAreaX:Number, bgAreaY:Number, bgAreaW:Number, bgAreaH:Number,
-            drawnMarkerRadius:Number
-        ) {
+        public function ChartCoordinates(screenPoints:Vector.<ScreenPoint>, plotsAreaX:Number, plotsAreaY:Number, plotsAreaW:Number, plotsAreaH:Number, bgAreaX:Number, bgAreaY:Number, bgAreaW:Number, bgAreaH:Number, drawnMarkerRadius:Number) {
             this.screenPoints = screenPoints || new Vector.<ScreenPoint>;
 
             this.plotsAreaX = plotsAreaX;
@@ -40,14 +35,24 @@ package com.github.ciacob.flexnodal.utils {
             this.drawnMarkerRadius = drawnMarkerRadius;
         }
 
+        /**
+         * Makes and returns a deep clone of current screen points.
+         */
+        public function cloneScreenPoints():Vector.<ScreenPoint> {
+            if (!screenPoints) {
+                return null;
+            }
+            const clone:Vector.<ScreenPoint> = new Vector.<ScreenPoint>(screenPoints.length);
+            for (var i:int = 0; i < screenPoints.length; i++) {
+                const original:ScreenPoint = screenPoints[i];
+                clone[i] = new ScreenPoint(original.x, original.y, original.synthetic);
+            }
+            return clone;
+        }
+
         /** Factory for an "empty" coordinates instance. */
         public static function empty():ChartCoordinates {
-            return new ChartCoordinates(
-                new <ScreenPoint>[],
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0
-            );
+            return new ChartCoordinates(new <ScreenPoint>[], 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 }
