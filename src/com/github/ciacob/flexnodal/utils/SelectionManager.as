@@ -80,7 +80,6 @@ package com.github.ciacob.flexnodal.utils {
             // Un-marks the previous anchor, if any.
             if (__anchorNode && __anchorNode !== value) {
                 __anchorNode.isAnchor = false;
-                __anchorNode.isDirty = true;
                 __haveAnchorChanges = true;
             }
 
@@ -88,7 +87,6 @@ package com.github.ciacob.flexnodal.utils {
             __anchorNode = value;
             if (__anchorNode) {
                 __anchorNode.isAnchor = true;
-                __anchorNode.isDirty = true;
                 __haveAnchorChanges = true;
             }
         }
@@ -104,7 +102,6 @@ package com.github.ciacob.flexnodal.utils {
             if (!node || node.isSelected === selected) {
                 return false;
             }
-            node.isDirty = true;
             node.isSelected = selected;
             return true;
         }

@@ -15,9 +15,6 @@ package com.github.ciacob.flexnodal.utils {
             this.logicalX = nx;
             this.logicalY = ny;
             this.isSynthetic = isSynthetic;
-
-            // Nodes are created as "dirty" by default.
-            this.isDirty = true;
         }
 
         // Normalized, or "logical" X-axis value of this node, unrelated to actual
@@ -38,9 +35,6 @@ package com.github.ciacob.flexnodal.utils {
         // of an incomplete chart dataset (a dataset not starting and/or ending at
         // `0`, `respectively `1` on the X-axis)
         public var isSynthetic:Boolean;
-
-        // `True` if this node's corresponding marker is pending a redraw operation.
-        public var isDirty:Boolean;
 
         // `True` if, on the next redraw operation, this node's corresponding marker
         // should be depicted as selected (e.g., different color, etc.).

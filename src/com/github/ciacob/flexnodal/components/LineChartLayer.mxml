@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
     xmlns:s="library://ns.adobe.com/flex/spark"
-    xmlns:mx="library://ns.adobe.com/flex/mx">
+    xmlns:mx="library://ns.adobe.com/flex/mx"
+    resize="{_dragBoundsChanged = true}">
 
     <fx:Metadata>
         [Style(name="lineColor", type="uint", format="Color", inherit="false")]
@@ -41,13 +42,10 @@
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.Node;
             import com.github.ciacob.flexnodal.utils.ChartCoordinates;
-            import com.github.ciacob.flexnodal.utils.ScreenPoint;
             import com.github.ciacob.flexnodal.utils.DragDeltas;
             import flash.events.MouseEvent;
-            import flash.events.MouseEvent;
-            import flash.events.MouseEvent;
             import flash.geom.Rectangle;
-            import com.github.ciacob.flexnodal.utils.ScreenPoint;
+            import flash.geom.Point;
             
             private static const DEFAULT_PADDING:uint = 5;
             
@@ -122,7 +120,7 @@
             
             // Deep clone of the last known screen points, to use when computing
             // new points based on the dragging delta.
-            private var _oldScreenPoints:Vector.<ScreenPoint>;
+            private var _oldScreenPoints:Vector.<Point>;
             
             // -------------------
             // The `values` property
@@ -250,11 +248,6 @@
                     _nodes.splice(idx, 1);
                 }
             
-                // Mark all nodes for redrawing and repositioning.
-                for (var i:int = 0; i < _nodes.length; i++) {
-                    _nodes[i].isDirty = true;
-                }
-            
                 // If deletion was effective, restore integrity of the remaining dataset,
                 // trim the available markers, schedule a redraw, and broadcast the changes.
                 if (_nodes.length != numNodesBefore) {
@@ -326,9 +319,13 @@
             override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
                 super.updateDisplayList(unscaledWidth, unscaledHeight);
             
+                // Draw the chart if applicable
+                if (!_nodes || !_nodes.length) {
+                    return;
+                }
                 _lastKnownCoords = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
                 _drawBackground(_lastKnownCoords);
-                _drawChart(_lastKnownCoords);
+                _drawChart(_nodes, _lastKnownCoords);
             
                 // Update dragging boundaries if needed.
                 if (_dragBoundsChanged) {
@@ -389,6 +386,26 @@
             }
             
             /**
+             * Clones current Nodes' screen coordinates in order to freeze them during dragging.
+             *
+             * @return  An ordered Vector of Points respectively holding the screen coordinates
+             *          of all Nodes.
+             */
+            private function _cloneScreenPoints():Vector.<Point> {
+                const clone:Vector.<Point> = new <Point>[];
+                if (!_nodes || !_nodes.length) {
+                    return clone;
+                }
+            
+                for (var i:int = 0; i < _nodes.length; i++) {
+                    const node:Node = _nodes[i];
+                    const p:Point = new Point(node.screenX, node.screenY);
+                    clone.push(p);
+                }
+                return clone;
+            }
+            
+            /**
              * Adds a point based on received `x` and `y` values. Returns the created Node,
              * or `null` on failure. Also dispatches a `NODES_CHANGE` NodalEvent (opt-out).
              */
@@ -430,11 +447,6 @@
                 const node:Node = new Node(x, adjustedY);
                 _nodes.splice(idx, 0, node);
                 _provisionMarkers(_nodes, _markerLayer);
-            
-                // Mark all nodes for redrawing and repositioning.
-                for (var i:int = 0; i < _nodes.length; i++) {
-                    _nodes[i].isDirty = true;
-                }
                 invalidateDisplayList();
             
                 // Broadcast the changes.
@@ -603,8 +615,7 @@
                     return;
                 }
             
-                // Any touched node should be redrawn on the next cycle.
-                node.isDirty = true;
+                // Any Node touch should cause redrawing on the next cycle.
                 invalidateDisplayList();
             
                 switch (event.type) {
@@ -628,7 +639,6 @@
                     case MouseEvent.DOUBLE_CLICK:
                         if (node.isSynthetic) {
                             node.isSynthetic = false;
-                            node.isDirty = true;
                             if (_selectionManager.accountFor(event, node)) {
                                 _broadcastSelection();
                                 _dragBoundsChanged = true;
@@ -679,7 +689,7 @@
                         // Make an immutable snapshot of the current marker's screen points.
                         // We'll need that later to compute the new coordinates, while
                         // dragging.
-                        _oldScreenPoints = _lastKnownCoords.cloneScreenPoints();
+                        _oldScreenPoints = _cloneScreenPoints();
             
                         // Transfer event listening to the Stage, to minimize the number
                         // of times it fires.
@@ -725,24 +735,19 @@
                 yDelta = Math.max(_lastKnownDragBounds.topDelta, Math.min(_lastKnownDragBounds.bottomDelta, yDelta));
             
                 // Apply delta to all selected nodes, without computing logical values (we'll
-                // do that when dragging is done).
-                const currentScreenPoints:Vector.<ScreenPoint> = _lastKnownCoords.screenPoints;
+                // save that for when dragging is done).
                 for (var i:int = 0; i < numSelNodes; i++) {
                     const selNode:Node = selNodes[i];
                     const selNodeIdx:int = _nodes.indexOf(selNode);
                     if (selNodeIdx === -1) {
                         continue;
                     }
-                    if (selNodeIdx >= currentScreenPoints.length) {
-                        continue;
-                    }
-                    const screenPoint:ScreenPoint = currentScreenPoints[selNodeIdx];
-                    screenPoint.x = _oldScreenPoints[selNodeIdx].x + xDelta;
-                    screenPoint.y = _oldScreenPoints[selNodeIdx].y + yDelta;
-                    selNode.isDirty = true;
+            
+                    selNode.screenX = _oldScreenPoints[selNodeIdx].x + xDelta;
+                    selNode.screenY = _oldScreenPoints[selNodeIdx].y + yDelta;
                 }
             
-                _drawChart(_lastKnownCoords);
+                _drawChart(_nodes, _lastKnownCoords);
             }
             
             /**
@@ -763,13 +768,11 @@
             
                 // Convert the new coordinates markers were dragged to into logical points,
                 // and export them.
-                const currentScreenPoints:Vector.<ScreenPoint> = _lastKnownCoords.screenPoints;
                 for (var i:int = 0; i < _nodes.length; i++) {
                     const node:Node = _nodes[i];
-                    const screenPoint:ScreenPoint = currentScreenPoints[i];
-                    const lx:Number = (screenPoint.x - _lastKnownCoords.plotsAreaX) / _lastKnownCoords.plotsAreaW;
+                    const lx:Number = (node.screenX - _lastKnownCoords.plotsAreaX) / _lastKnownCoords.plotsAreaW;
                     node.logicalX = Math.max(0, Math.min(1, lx));
-                    const ly:Number = 1 - ((screenPoint.y - _lastKnownCoords.plotsAreaY) / _lastKnownCoords.plotsAreaH);
+                    const ly:Number = 1 - ((node.screenY - _lastKnownCoords.plotsAreaY) / _lastKnownCoords.plotsAreaH);
                     node.logicalY = Math.max(0, Math.min(1, ly));
                 }
                 _values = _exportNodes(_nodes);
@@ -889,7 +892,10 @@
             /**
              * Computes pixel coordinates and chart background geometry from existing nodes.
              */
-            private function _computeChartCoords(availableWidth:Number, availableHeight:Number, nodes:Vector.<Node>):ChartCoordinates {
+            private function _computeChartCoords(
+                    availableWidth:Number,
+                    availableHeight:Number,
+                    nodes:Vector.<Node>):ChartCoordinates {
                 if (!nodes || nodes.length == 0) {
                     return ChartCoordinates.empty();
                 }
@@ -913,16 +919,13 @@
                 const bgAreaH:Number = availableHeight - (padding * 2);
             
                 // Map normalized to pixel coords
-                const screenPoints:Vector.<ScreenPoint> = new <ScreenPoint>[];
                 for (var i:int = 0; i < nodes.length; i++) {
                     const node:Node = nodes[i];
-                    const sx:Number = plotsAreaX + node.logicalX * plotsAreaW;
-                    const sy:Number = plotsAreaY + (1 - node.logicalY) * plotsAreaH; // invert Y
-                    screenPoints.push(new ScreenPoint(sx, sy, node.isSynthetic));
+                    node.screenX = plotsAreaX + node.logicalX * plotsAreaW;
+                    node.screenY = plotsAreaY + (1 - node.logicalY) * plotsAreaH; // invert Y
                 }
             
                 return new ChartCoordinates(
-                        screenPoints,
                         plotsAreaX, plotsAreaY, plotsAreaW, plotsAreaH,
                         bgAreaX, bgAreaY, bgAreaW, bgAreaH,
                         drawnMarkerRadius
@@ -973,14 +976,13 @@
             /**
              * Draws the line chart
              */
-            private function _drawChart(coords:ChartCoordinates):void {
-                const g:Graphics = _chartLayer.graphics;
-                g.clear();
-            
-                const points:Vector.<ScreenPoint> = coords.screenPoints;
-                if (!points || points.length == 0) {
+            private function _drawChart(nodes:Vector.<Node>, coords:ChartCoordinates):void {
+                if (!nodes || !nodes.length) {
                     return;
                 }
+            
+                const g:Graphics = _chartLayer.graphics;
+                g.clear();
             
                 // Styles
                 const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
@@ -990,39 +992,38 @@
                 const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
             
                 // 1) Draw the invisible, mouse-catch layer.
-                _drawChartLines(g, points, thickness * 4, 0, 0.001);
+                _drawChartLines(g, nodes, thickness * 4, 0, 0.001);
             
                 // 2) Draw the actual polyline.
-                _drawChartLines(g, points, thickness, lineColor);
+                _drawChartLines(g, nodes, thickness, lineColor);
             
                 // 3) Draw and place markers whose nodes are dirty.
                 _updateMarkers(
-                        points,
+                        nodes,
                         thickness,
                         coords.drawnMarkerRadius,
-                        {
-                            base: lineColor,
-                            over: lineColorOver,
-                            selected: lineColorSelected,
-                            anchor: lineColorAnchor
-                        }
+                        lineColor, // base
+                        lineColorOver, // over
+                        lineColorSelected, // selected
+                        lineColorAnchor // anchor
+            
                     );
             }
             
             /**
              * Draws only the line path for the chart.
              */
-            private function _drawChartLines(g:Graphics, points:Vector.<ScreenPoint>,
+            private function _drawChartLines(g:Graphics, nodes:Vector.<Node>,
                     thickness:Number, strokeColor:uint, alpha:Number = 1):void {
                 g.lineStyle(thickness, strokeColor, alpha);
             
-                for (var i:int = 0; i < points.length; i++) {
-                    const sp:ScreenPoint = points[i];
+                for (var i:int = 0; i < nodes.length; i++) {
+                    const node:Node = nodes[i];
                     if (i == 0) {
-                        g.moveTo(sp.x, sp.y);
+                        g.moveTo(node.screenX, node.screenY);
                     }
                     else {
-                        g.lineTo(sp.x, sp.y);
+                        g.lineTo(node.screenX, node.screenY);
                     }
                 }
             }
@@ -1031,36 +1032,29 @@
              * Draw and position markers for the given points.
              * Only redraws markers whose associated nodes are "dirty".
              */
-            private function _updateMarkers(points:Vector.<ScreenPoint>, thickness:Number, markerRadius:Number, colors:Object):void {
-                // Expecting colors: { base:uint, over:uint, selected:uint, anchor:uint }
-                for (var i:int = 0; i < points.length; i++) {
-                    const sp:ScreenPoint = points[i];
+            private function _updateMarkers(
+                nodes:Vector.<Node>,
+                thickness:Number,
+                markerRadius:Number,
+                baseColor:uint,
+                overColor:uint,
+                selectedColor:uint,
+                anchorColor:uint
+                ):void {
+                
+                for (var i:int = 0; i < nodes.length; i++) {
+                    const node:Node = nodes[i];
+                    const marker:UIComponent = $marker(node);
             
-                    // Each point uses the i-th marker
-                    const marker:UIComponent = UIComponent(_markerLayer.getChildAt(i));
+                    // Decide fill/border colors based on node state.
+                    const nodeBgColor:uint = node.isSelected ? selectedColor
+                        : node.isHovered ? overColor
+                        : baseColor;
+                    const nodeBorderColor:uint = node.isAnchor ? anchorColor : nodeBgColor;
             
-                    // Lookup the associated node for dirtiness/state
-                    const node:Node = $node(marker);
-                    if (!node || !node.isDirty) {
-                        continue;
-                    }
-            
-                    // Decide fill/border based on node state
-                    const nodeBgColor:uint = node.isSelected ? colors.selected
-                        : node.isHovered ? colors.over
-                        : colors.base;
-                    const nodeBorderColor:uint = node.isAnchor ? colors.anchor : nodeBgColor;
-            
-                    // (Re)draw + place marker.
-                    _drawMarker(marker, nodeBgColor, thickness, markerRadius, sp.synthetic, nodeBorderColor);
-                    _positionMarker(marker, sp);
-            
-                    // Clear the dirtiness flag.
-                    node.isDirty = false;
-            
-                    // Let the Node know where its corresponding marker lies on the screen.
-                    node.screenX = sp.x;
-                    node.screenY = sp.y;
+                    // (Re)draw and place marker.
+                    _drawMarker(marker, nodeBgColor, thickness, markerRadius, node.isSynthetic, nodeBorderColor);
+                    _positionMarker(marker, node);
                 }
             }
             
@@ -1083,9 +1077,9 @@
             /**
              * (Re)positions an existing marker
              */
-            private function _positionMarker(marker:UIComponent, point:ScreenPoint):void {
-                marker.x = point.x;
-                marker.y = point.y;
+            private function _positionMarker(marker:UIComponent, node:Node):void {
+                marker.x = node.screenX;
+                marker.y = node.screenY;
             }
         ]]>
     </fx:Script>
