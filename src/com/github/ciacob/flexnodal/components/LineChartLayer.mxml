@@ -13,10 +13,9 @@
         
         [Style(name="padding", type="Number", inherit="false")]
         
-        
         [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
         [Event(name="nodesChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
-        [Event(name="layerChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="layerClick", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
     <fx:Script>
@@ -36,6 +35,7 @@
             import flash.geom.Rectangle;
             import flash.geom.Point;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
+            import flash.events.MouseEvent;
             
             // The container to draw background decorations in
             private var _bgLayer:UIComponent;
@@ -157,6 +157,13 @@
                 }
             }
             
+            // -------------------------------
+            // The `markersFactory` property
+            // -------------------------------
+            
+            // An optional name to use for this chart
+            public var layerName:String;
+            
             /**
              * Marks all nodes of the chart as unselected, also dispatching a
              * `SELECTION_CHANGE` NodalEvent (opt-out).
@@ -239,6 +246,7 @@
                 _chartLayer.buttonMode = true;
                 _chartLayer.useHandCursor = true;
                 _chartLayer.doubleClickEnabled = true;
+                _chartLayer.addEventListener(MouseEvent.CLICK, _onChartClicked);
                 _chartLayer.addEventListener(MouseEvent.DOUBLE_CLICK, _onChartDoubleClicked);
                 addElement(_chartLayer);
             
@@ -524,6 +532,14 @@
             }
             
             /**
+             * Listener, executes when the chart line is clicked. Just broadcasts
+             * a NodalEvent.LAYER_CLICK event.
+             */
+            private function _onChartClicked(event:MouseEvent):void {
+                dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, layerName));
+            }
+            
+            /**
              * Listener, executes when the chart line is double clicked.
              * Creates a new Node at the closest legit location to where
              * the user double-clicked.
@@ -561,9 +577,13 @@
              * via mouse.
              */
             private function _onMarkerHandled(event:MouseEvent):void {
+                if (!event || !event.target) {
+                    return;
+                }
+            
                 const marker:UIComponent = event.target as UIComponent;
                 const node:Node = $node(marker);
-                if (!event || !event.target || !node) {
+                if (!node) {
                     return;
                 }
             
@@ -602,6 +622,7 @@
                         // Mouse down on a non-synthetic node sets up dragging. Whether dragging actually occurs
                         // depends on the mouse being moved BEFORE a mouse down event is fired.
                     case MouseEvent.MOUSE_DOWN:
+                        dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, layerName));
                         if (!stage ||
                                 node.isSynthetic ||
                                 isNaN(node.screenX) ||
@@ -846,7 +867,7 @@
             
             /**
              * Draws the minimal graphics that will secure the space of our chart, while letting its
-             * background fully click-through.  
+             * background fully click-through.
              */
             private function _reserveSpace(coords:ChartCoordinates):void {
                 const g:Graphics = _bgLayer.graphics;

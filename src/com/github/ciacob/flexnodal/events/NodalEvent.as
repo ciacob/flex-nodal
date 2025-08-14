@@ -3,7 +3,7 @@ package com.github.ciacob.flexnodal.events {
 
     public class NodalEvent extends Event {
 
-        public static const LAYER_CHANGE:String = "layerChange";
+        public static const LAYER_CLICK:String = "layerClick";
         public static const NODES_CHANGE:String = "nodesChange";
         public static const SELECTION_CHANGE:String = "selectionChange";
 
