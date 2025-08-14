@@ -157,12 +157,51 @@
                 }
             }
             
-            // -------------------------------
-            // The `markersFactory` property
-            // -------------------------------
+            // ------------------------
+            // The `layerName` property
+            // ------------------------
             
             // An optional name to use for this chart
+            [Bindable]
             public var layerName:String;
+            
+            // ----------------------
+            // The `enabled` property
+            // ----------------------
+            
+            /**
+             * Storage for the `enabled` property.
+             */
+            private var _enabled:Boolean = true;
+            
+            /**
+             * Flag to raise when the `_enabled` property has been externally changed.
+             */
+            private var _enabledChanged:Boolean;
+            
+            /**
+             * Gets the current value of the `enabled` property.
+             */
+            override public function get enabled():Boolean {
+                return _enabled;
+            }
+            
+            /**
+             * Sets the `enabled` property. Setting this property to `false`
+             * causes the chart to not display nodes/markers. Also, double-clicking
+             * a chart line does not result in creating a node anymore. `LAYER_CLICK`
+             * events will still be dispatched.
+             *
+             * Note: by default, all charts are created as enabled.
+             */
+            [Bindable]
+            override public function set enabled(value:Boolean):void {
+                if (value !== _enabled) {
+                    _enabled = value;
+                    _enabledChanged = true;
+                    invalidateProperties();
+                }
+            }
             
             /**
              * Marks all nodes of the chart as unselected, also dispatching a
@@ -279,6 +318,17 @@
             
                 if (_markersFactoryChanged) {
                     _markersFactoryChanged = false;
+                    invalidateDisplayList();
+                }
+            
+                if (_enabledChanged) {
+                    _enabledChanged = false;
+                    if (_selectionManager && !_enabled) {
+                        _selectionManager.clearSelection();
+                        _broadcastSelection();
+                        _dragBoundsChanged = true;
+                    }
+                    _provisionMarkers(_nodes, _markerLayer);
                     invalidateDisplayList();
                 }
             }
@@ -487,7 +537,7 @@
              * No (re)drawing is done here.
              */
             private function _provisionMarkers(nodes:Vector.<Node>, container:UIComponent):void {
-                const numNodes:uint = nodes.length;
+                const numNodes:uint = _enabled ? nodes.length : 0;
             
                 // Append
                 while (_markerLayer.numChildren < numNodes) {
@@ -545,8 +595,10 @@
              * the user double-clicked.
              */
             private function _onChartDoubleClicked(event:MouseEvent):void {
-                if (!event || isNaN(event.localX) || isNaN(event.localY) ||
-                        !_chartLayer || !_lastKnownCoords) {
+                if (!_enabled ||
+                        !event || isNaN(event.localX) || isNaN(event.localY) ||
+                        !_chartLayer ||
+                        !_lastKnownCoords) {
                     return;
                 }
             
@@ -906,16 +958,18 @@
                 _drawChartLines(g, nodes, thickness, lineColor);
             
                 // 3) Draw and place markers whose nodes are dirty.
-                _updateMarkers(
-                        nodes,
-                        thickness,
-                        coords.drawnMarkerRadius,
-                        lineColor, // base
-                        lineColorOver, // over
-                        lineColorSelected, // selected
-                        lineColorAnchor // anchor
+                if (_enabled) {
             
-                    );
+                    _updateMarkers(
+                            nodes,
+                            thickness,
+                            coords.drawnMarkerRadius,
+                            lineColor, // base
+                            lineColorOver, // over
+                            lineColorSelected, // selected
+                            lineColorAnchor // anchor
+                        );
+                }
             }
             
             /**
@@ -953,6 +1007,9 @@
                 for (var i:int = 0; i < nodes.length; i++) {
                     const node:Node = nodes[i];
                     const marker:UIComponent = $marker(node);
+                    if (!marker) {
+                        continue;
+                    }
             
                     // Decide fill/border colors based on node state.
                     const nodeBgColor:uint = node.isSelected ? selectedColor

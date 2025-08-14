@@ -43,9 +43,9 @@
             private function _onNodesChanged(event:NodalEvent):void {
                 trace('==> chart values:', chart.values ? '[' + chart.values.join('] [') + ']' : 'NULL');
             }
-
-            private function _onLayerClick (event : NodalEvent) : void {
-                trace ('~~~> layer clicked:', event.payload, event.target);
+            
+            private function _onLayerClick(event:NodalEvent):void {
+                trace('~~~> layer clicked:', event.payload, event.target);
             }
         ]]>
     </fx:Script>
@@ -85,6 +85,9 @@
             <s:Button label="Delete selection"
                 enabled="{!!_selectedNode}"
                 click="{chart.deleteSelection()}"/>
+
+            <s:Button label="{chart.enabled? 'Disable' : 'Enable'} chart"
+                click="{chart.enabled = !chart.enabled}"/>
 
         </s:HGroup>
     </s:VGroup>
