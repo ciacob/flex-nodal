@@ -1,5 +1,7 @@
 package com.github.ciacob.flexnodal.utils {
 
+    import mx.core.UIComponent;
+
     /**
      * Holder for various (potentially) generic helper functions.
      */
@@ -47,6 +49,21 @@ package com.github.ciacob.flexnodal.utils {
         }
 
         /**
+         * Helper, reads a CSS style with a fallback value.
+         *
+         * @param host - Host component to invoke `getStyle` on.
+         * @param name - Name of the style to read.
+         * @param fallback - Default value to assume if no style can be retrieved for given name.
+         */
+        public static function $getStyle(host:UIComponent, name:String, fallback:*):* {
+            var val:* = host.getStyle(name);
+            if (val === undefined) {
+                return fallback;
+            }
+            return val;
+        }
+
+        /**
          * Performs linear interpolation of a Y value given an X value
          * and two known points (x1, y1) and (x2, y2).
          *
@@ -80,6 +97,63 @@ package com.github.ciacob.flexnodal.utils {
             return y1 + t * (y2 - y1);
         }
 
+        /**
+         * Computes pixel coordinates and chart background geometry from existing nodes.
+         * 
+         * @param   host
+         *          The UIComponent hosting the chart whose coordinates are to be computed.
+         * 
+         * @param   availableWidth
+         *          The most up to date, precalculated width of the host.
+         * 
+         * @param   availableHeight
+         *          The most up to date, precalculated height of the host.
+         * 
+         * @param   nodes
+         *          Optional vector with all the logical "nodes" that represent this chart. If given, their `screenX` and `screenY` properties will be respectively calculated and set, as a side effect.
+         */
+        public static function computeChartCoords(
+                host:UIComponent,
+                availableWidth:Number,
+                availableHeight:Number,
+                nodes:Vector.<Node> = null):ChartCoordinates {
+            if (!host || !availableWidth || !availableHeight) {
+                return ChartCoordinates.empty();
+            }
+
+            // Styles
+            const padding:Number = Helpers.$getStyle(host, "padding", DefaultStyles.DEFAULT_PADDING);
+            const thickness:Number = Helpers.$getStyle(host, "lineThickness", DefaultStyles.DEFAULT_LINE_THICKNESS);
+
+            const drawnMarkerRadius:Number = thickness * 2;
+            const actualMarkerHalf:Number = thickness * 2.5;
+            const actualMarkerSize:Number = actualMarkerHalf * 2;
+
+            const plotsAreaX:Number = padding + actualMarkerHalf;
+            const plotsAreaY:Number = padding + actualMarkerHalf;
+            const plotsAreaW:Number = availableWidth - (padding * 2) - actualMarkerSize;
+            const plotsAreaH:Number = availableHeight - (padding * 2) - actualMarkerSize;
+
+            const bgAreaX:Number = padding;
+            const bgAreaY:Number = padding;
+            const bgAreaW:Number = availableWidth - (padding * 2);
+            const bgAreaH:Number = availableHeight - (padding * 2);
+
+            // Map normalized to pixel coords
+            if (nodes && nodes.length) {
+                for (var i:int = 0; i < nodes.length; i++) {
+                    const node:Node = nodes[i];
+                    node.screenX = plotsAreaX + node.logicalX * plotsAreaW;
+                    node.screenY = plotsAreaY + (1 - node.logicalY) * plotsAreaH; // invert Y
+                }
+            }
+
+            return new ChartCoordinates(
+                    plotsAreaX, plotsAreaY, plotsAreaW, plotsAreaH,
+                    bgAreaX, bgAreaY, bgAreaW, bgAreaH,
+                    drawnMarkerRadius
+                );
+        }
 
     }
 }

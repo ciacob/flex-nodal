@@ -3,4 +3,91 @@
     xmlns:s="library://ns.adobe.com/flex/spark"
     xmlns:mx="library://ns.adobe.com/flex/mx">
 
+    <fx:Metadata>
+        [Style(name="padding", type="Number", inherit="false")]
+        
+        [Style(name="layerColor", type="uint", format="Color", inherit="false")]
+        [Style(name="chartBg", type="uint", format="Color", inherit="false")]
+        [Style(name="chartBgAlpha", type="Number", inherit="false")]
+        
+        [Style(name="yAxisColor", type="uint", format="Color", inherit="false")]
+        [Style(name="yAxisAlpha", type="Number", inherit="false")]
+        
+        [Style(name="xAxisColor", type="uint", format="Color", inherit="false")]
+        [Style(name="xAxisAlpha", type="Number", inherit="false")]
+    </fx:Metadata>
+
+    <fx:Script>
+        <![CDATA[
+            import mx.core.UIComponent;
+            import com.github.ciacob.flexnodal.utils.Helpers;
+            import com.github.ciacob.flexnodal.utils.ChartCoordinates;
+            import com.github.ciacob.flexnodal.utils.DefaultStyles;
+            
+            // The container to draw background decorations in
+            private var _bgLayer:UIComponent;
+            
+            /**
+             * @see Group.createChildren()
+             */
+            override protected function createChildren():void {
+                super.createChildren();
+            
+                _bgLayer = new UIComponent();
+                addElement(_bgLayer);
+            }
+            
+            /**
+             * @see Group.updateDisplayList
+             */
+            override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+                super.updateDisplayList(unscaledWidth, unscaledHeight);
+            
+                const coords:ChartCoordinates = Helpers.computeChartCoords(this, unscaledWidth, unscaledHeight);
+                _drawBackground(coords);
+            }
+            
+            /**
+             * Draws the background layers
+             */
+            private function _drawBackground(coords:ChartCoordinates):void {
+                const g:Graphics = _bgLayer.graphics;
+                g.clear();
+            
+                const availableW:Number = width;
+                const availableH:Number = height;
+            
+                const layerColor:uint = Helpers.$getStyle(this, "layerColor", DefaultStyles.DEFAULT_LAYER_COLOR);
+                const chartBg:uint = Helpers.$getStyle(this, "chartBg", DefaultStyles.DEFAULT_CHART_BG);
+                const chartBgAlpha:Number = Helpers.$getStyle(this, "chartBgAlpha", DefaultStyles.DEFAULT_CHART_BG_ALPHA);
+            
+                const yAxisColor:uint = Helpers.$getStyle(this, "yAxisColor", DefaultStyles.DEFAULT_Y_AXIS_COLOR);
+                const yAxisAlpha:Number = Helpers.$getStyle(this, "yAxisAlpha", DefaultStyles.DEFAULT_Y_AXIS_ALPHA);
+            
+                const xAxisColor:uint = Helpers.$getStyle(this, "xAxisColor", DefaultStyles.DEFAULT_X_AXIS_COLOR);
+                const xAxisAlpha:Number = Helpers.$getStyle(this, "xAxisAlpha", DefaultStyles.DEFAULT_X_AXIS_ALPHA);
+            
+                // Full layer background (padded area too)
+                g.beginFill(layerColor, 1);
+                g.drawRect(0, 0, availableW, availableH);
+                g.endFill();
+            
+                // Chart background (inside padded area)
+                g.beginFill(chartBg, chartBgAlpha);
+                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW, coords.bgAreaH);
+                g.endFill();
+            
+                // Y-axis (left half of chart area)
+                g.beginFill(yAxisColor, yAxisAlpha);
+                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW / 2, coords.bgAreaH);
+                g.endFill();
+            
+                // X-axis (bottom half of chart area) over the Y-axis fill
+                g.beginFill(xAxisColor, xAxisAlpha);
+                g.drawRect(coords.bgAreaX, coords.bgAreaY + coords.bgAreaH / 2, coords.bgAreaW, coords.bgAreaH / 2);
+                g.endFill();
+            }
+        ]]>
+    </fx:Script>
+
 </s:Group>

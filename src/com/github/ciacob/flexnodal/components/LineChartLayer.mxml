@@ -9,21 +9,10 @@
         [Style(name="lineColorOver", type="uint", format="Color", inherit="false")]
         [Style(name="lineColorSelected", type="uint", format="Color", inherit="false")]
         [Style(name="lineColorAnchor", type="uint", format="Color", inherit="false")]
-        
         [Style(name="lineThickness", type="Number", inherit="false")]
         
         [Style(name="padding", type="Number", inherit="false")]
         
-        [Style(name="layerColor", type="uint", format="Color", inherit="false")]
-        
-        [Style(name="chartBg", type="uint", format="Color", inherit="false")]
-        [Style(name="chartBgAlpha", type="Number", inherit="false")]
-        
-        [Style(name="yAxisColor", type="uint", format="Color", inherit="false")]
-        [Style(name="yAxisAlpha", type="Number", inherit="false")]
-        
-        [Style(name="xAxisColor", type="uint", format="Color", inherit="false")]
-        [Style(name="xAxisAlpha", type="Number", inherit="false")]
         
         [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
         [Event(name="nodesChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
@@ -46,32 +35,7 @@
             import flash.events.MouseEvent;
             import flash.geom.Rectangle;
             import flash.geom.Point;
-            
-            private static const DEFAULT_PADDING:uint = 5;
-            
-            private static const DEFAULT_LAYER_COLOR:uint = 0xcccccc;
-            
-            private static const DEFAULT_CHART_BG:uint = 0xffffff;
-            
-            private static const DEFAULT_CHART_BG_ALPHA:Number = 0.8;
-            
-            private static const DEFAULT_Y_AXIS_COLOR:uint = 0x00ccff;
-            
-            private static const DEFAULT_Y_AXIS_ALPHA:Number = 0.6;
-            
-            private static const DEFAULT_X_AXIS_COLOR:uint = 0x00ffcc;
-            
-            private static const DEFAULT_X_AXIS_ALPHA:Number = 0.6;
-            
-            private static const DEFAULT_LINE_COLOR:uint = 0x000000;
-            
-            private static const DEFAULT_LINE_COLOR_OVER:uint = 0x003399;
-            
-            private static const DEFAULT_LINE_COLOR_SELECTED:uint = 0x006699;
-            
-            private static const DEFAULT_LINE_COLOR_ANCHOR:uint = 0x00ffff;
-            
-            private static const DEFAULT_LINE_THICKNESS:uint = 2;
+            import com.github.ciacob.flexnodal.utils.DefaultStyles;
             
             // The container to draw background decorations in
             private var _bgLayer:UIComponent;
@@ -323,8 +287,8 @@
                 if (!_nodes || !_nodes.length) {
                     return;
                 }
-                _lastKnownCoords = _computeChartCoords(unscaledWidth, unscaledHeight, _nodes);
-                _drawBackground(_lastKnownCoords);
+                _lastKnownCoords = Helpers.computeChartCoords(this, unscaledWidth, unscaledHeight, _nodes);
+                _reserveSpace(_lastKnownCoords);
                 _drawChart(_nodes, _lastKnownCoords);
             
                 // Update dragging boundaries if needed.
@@ -369,20 +333,6 @@
                     return null;
                 }
                 return (_markerLayer.getChildAt(nodeIndex) as UIComponent);
-            }
-            
-            /**
-             * Helper, reads a CSS style with a fallback value.
-             *
-             * @param name - Name of the style to read.
-             * @param fallback - Default value to assume if no style can be retrieved for given name.
-             */
-            private function _getStyle(name:String, fallback:*):* {
-                var val:* = getStyle(name);
-                if (val === undefined) {
-                    return fallback;
-                }
-                return val;
             }
             
             /**
@@ -895,86 +845,18 @@
             }
             
             /**
-             * Computes pixel coordinates and chart background geometry from existing nodes.
+             * Draws the minimal graphics that will secure the space of our chart, while letting its
+             * background fully click-through.  
              */
-            private function _computeChartCoords(
-                    availableWidth:Number,
-                    availableHeight:Number,
-                    nodes:Vector.<Node>):ChartCoordinates {
-                if (!nodes || nodes.length == 0) {
-                    return ChartCoordinates.empty();
-                }
-            
-                // Styles
-                const padding:Number = _getStyle("padding", DEFAULT_PADDING);
-                const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
-            
-                const drawnMarkerRadius:Number = thickness * 2;
-                const actualMarkerHalf:Number = thickness * 2.5;
-                const actualMarkerSize:Number = actualMarkerHalf * 2;
-            
-                const plotsAreaX:Number = padding + actualMarkerHalf;
-                const plotsAreaY:Number = padding + actualMarkerHalf;
-                const plotsAreaW:Number = availableWidth - (padding * 2) - actualMarkerSize;
-                const plotsAreaH:Number = availableHeight - (padding * 2) - actualMarkerSize;
-            
-                const bgAreaX:Number = padding;
-                const bgAreaY:Number = padding;
-                const bgAreaW:Number = availableWidth - (padding * 2);
-                const bgAreaH:Number = availableHeight - (padding * 2);
-            
-                // Map normalized to pixel coords
-                for (var i:int = 0; i < nodes.length; i++) {
-                    const node:Node = nodes[i];
-                    node.screenX = plotsAreaX + node.logicalX * plotsAreaW;
-                    node.screenY = plotsAreaY + (1 - node.logicalY) * plotsAreaH; // invert Y
-                }
-            
-                return new ChartCoordinates(
-                        plotsAreaX, plotsAreaY, plotsAreaW, plotsAreaH,
-                        bgAreaX, bgAreaY, bgAreaW, bgAreaH,
-                        drawnMarkerRadius
-                    );
-            }
-            
-            /**
-             * Draws the background layers
-             */
-            private function _drawBackground(coords:ChartCoordinates):void {
+            private function _reserveSpace(coords:ChartCoordinates):void {
                 const g:Graphics = _bgLayer.graphics;
                 g.clear();
             
                 const availableW:Number = width;
                 const availableH:Number = height;
-            
-                const layerColor:uint = _getStyle("layerColor", DEFAULT_LAYER_COLOR);
-                const chartBg:uint = _getStyle("chartBg", DEFAULT_CHART_BG);
-                const chartBgAlpha:Number = _getStyle("chartBgAlpha", DEFAULT_CHART_BG_ALPHA);
-            
-                const yAxisColor:uint = _getStyle("yAxisColor", DEFAULT_Y_AXIS_COLOR);
-                const yAxisAlpha:Number = _getStyle("yAxisAlpha", DEFAULT_Y_AXIS_ALPHA);
-            
-                const xAxisColor:uint = _getStyle("xAxisColor", DEFAULT_X_AXIS_COLOR);
-                const xAxisAlpha:Number = _getStyle("xAxisAlpha", DEFAULT_X_AXIS_ALPHA);
-            
-                // Full layer background (padded area too)
-                g.beginFill(layerColor, 1);
-                g.drawRect(0, 0, availableW, availableH);
-                g.endFill();
-            
-                // Chart background (inside padded area)
-                g.beginFill(chartBg, chartBgAlpha);
-                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW, coords.bgAreaH);
-                g.endFill();
-            
-                // Y-axis (left half of chart area)
-                g.beginFill(yAxisColor, yAxisAlpha);
-                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW / 2, coords.bgAreaH);
-                g.endFill();
-            
-                // X-axis (bottom half of chart area) over the Y-axis fill
-                g.beginFill(xAxisColor, xAxisAlpha);
-                g.drawRect(coords.bgAreaX, coords.bgAreaY + coords.bgAreaH / 2, coords.bgAreaW, coords.bgAreaH / 2);
+                g.beginFill(0, 0.001);
+                g.drawRect(0, 0, 1, availableH);
+                g.drawRect(0, availableH - 1, availableW, 1);
                 g.endFill();
             }
             
@@ -990,11 +872,11 @@
                 g.clear();
             
                 // Styles
-                const lineColor:uint = _getStyle("lineColor", DEFAULT_LINE_COLOR);
-                const lineColorOver:uint = _getStyle("lineColorOver", DEFAULT_LINE_COLOR_OVER);
-                const lineColorSelected:uint = _getStyle("lineColorSelected", DEFAULT_LINE_COLOR_SELECTED);
-                const lineColorAnchor:uint = _getStyle("lineColorAnchor", DEFAULT_LINE_COLOR_ANCHOR);
-                const thickness:Number = _getStyle("lineThickness", DEFAULT_LINE_THICKNESS);
+                const lineColor:uint = Helpers.$getStyle(this, "lineColor", DefaultStyles.DEFAULT_LINE_COLOR);
+                const lineColorOver:uint = Helpers.$getStyle(this, "lineColorOver", DefaultStyles.DEFAULT_LINE_COLOR_OVER);
+                const lineColorSelected:uint = Helpers.$getStyle(this, "lineColorSelected", DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
+                const lineColorAnchor:uint = Helpers.$getStyle(this, "lineColorAnchor", DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
+                const thickness:Number = Helpers.$getStyle(this, "lineThickness", DefaultStyles.DEFAULT_LINE_THICKNESS);
             
                 // 1) Draw the invisible, mouse-catch layer.
                 _drawChartLines(g, nodes, thickness * 4, 0, 0.001);
@@ -1038,15 +920,15 @@
              * Only redraws markers whose associated nodes are "dirty".
              */
             private function _updateMarkers(
-                nodes:Vector.<Node>,
-                thickness:Number,
-                markerRadius:Number,
-                baseColor:uint,
-                overColor:uint,
-                selectedColor:uint,
-                anchorColor:uint
+                    nodes:Vector.<Node>,
+                    thickness:Number,
+                    markerRadius:Number,
+                    baseColor:uint,
+                    overColor:uint,
+                    selectedColor:uint,
+                    anchorColor:uint
                 ):void {
-                
+            
                 for (var i:int = 0; i < nodes.length; i++) {
                     const node:Node = nodes[i];
                     const marker:UIComponent = $marker(node);
