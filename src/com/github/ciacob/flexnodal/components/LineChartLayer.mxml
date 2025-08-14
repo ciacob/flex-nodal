@@ -113,13 +113,13 @@
             // point of the marker being dragged, in stage coordinates.
             private var _dragClickOffset:Point;
             
-            // Storage for the screen X,Y of the marker dragging was started
-            // from. Together with `_dragClickOffset` helps establishing a
+            // Storage for the screen X,Y coordinates of the marker dragging was
+            // started from. Together with `_dragClickOffset` helps establishing a
             // dragging delta.
             private var _dragOrigin:Point;
             
-            // Deep clone of the last known screen points, to use when computing
-            // new points based on the dragging delta.
+            // Deep clone of the last known nodes/markers "screen points". They will
+            // be used computing new points based on the dragging delta.
             private var _oldScreenPoints:Vector.<Point>;
             
             // -------------------
@@ -575,6 +575,8 @@
             
             /**
              * Listener, executes when the chart line is double clicked.
+             * Creates a new Node at the closest legit location to where
+             * the user double-clicked.
              */
             private function _onChartDoubleClicked(event:MouseEvent):void {
                 if (!event || isNaN(event.localX) || isNaN(event.localY) ||
@@ -647,7 +649,8 @@
                         }
                         break;
             
-                        // Sets up mouse monitoring for selected Nodes' markers dragging.
+                        // Mouse down on a non-synthetic node sets up dragging. Whether dragging actually occurs
+                        // depends on the mouse being moved BEFORE a mouse down event is fired.
                     case MouseEvent.MOUSE_DOWN:
                         if (!stage ||
                                 node.isSynthetic ||
@@ -706,7 +709,9 @@
             
             /**
              * Triggered continuously while mouse is being moved as part of a
-             * dragging operation.
+             * dragging operation. Results in selected markers being moved accordingly,
+             * and the chart lines being redrawn. Actual node values are not
+             * updated until mouse is released.
              */
             private function _onStageMouseMove(event:MouseEvent):void {
                 if (!_nowDragging ||
@@ -751,8 +756,8 @@
             }
             
             /**
-             * Triggered when mouse is being released anywhere over the stage,
-             * to indicate the end of a dragging operation.
+             * Triggered when mouse is being released anywhere over the stage.
+             * Finalizes a node dragging operation.
              */
             private function _onStageMouseUp(event:MouseEvent):void {
                 if (!_nowDragging || !_lastKnownCoords || !_nodes || !_nodes.length) {
