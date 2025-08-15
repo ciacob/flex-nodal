@@ -672,7 +672,7 @@
                         break;
             
                         // Mouse down on a non-synthetic node sets up dragging. Whether dragging actually occurs
-                        // depends on the mouse being moved BEFORE a mouse down event is fired.
+                        // depends on the mouse being moved BEFORE a mouse up event is fired.
                     case MouseEvent.MOUSE_DOWN:
                         dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, layerName));
                         if (!stage ||
