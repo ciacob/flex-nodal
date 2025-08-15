@@ -804,11 +804,11 @@
                 // and export them.
                 for (var i:int = 0; i < _nodes.length; i++) {
                     const node:Node = _nodes[i];
-
-                    const lx:Number = (i === 0 || i === _nodes.length - 1) ? 0 :
+            
+                    const lx:Number = (i === 0) ? 0 : (i === _nodes.length - 1) ? 1 :
                         (node.screenX - _lastKnownCoords.plotsAreaX) / _lastKnownCoords.plotsAreaW;
                     node.logicalX = Math.max(0, Math.min(1, lx));
-
+            
                     const ly:Number = 1 - ((node.screenY - _lastKnownCoords.plotsAreaY) / _lastKnownCoords.plotsAreaH);
                     node.logicalY = Math.max(0, Math.min(1, ly));
                 }
