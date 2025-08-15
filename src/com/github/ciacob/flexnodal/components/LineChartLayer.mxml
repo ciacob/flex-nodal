@@ -537,23 +537,26 @@
              * No (re)drawing is done here.
              */
             private function _provisionMarkers(nodes:Vector.<Node>, container:UIComponent):void {
+                if (!_markersFactory) {
+                    return;
+                }
                 const numNodes:uint = _enabled ? nodes.length : 0;
             
                 // Append
-                while (_markerLayer.numChildren < numNodes) {
+                while (container.numChildren < numNodes) {
             
-                    const markerToAdd:UIComponent = markersFactory.give();
+                    const markerToAdd:UIComponent = _markersFactory.give();
                     _attachListeners(markerToAdd);
-                    _markerLayer.addChild(markerToAdd);
+                    container.addChild(markerToAdd);
                 }
             
                 // Trim
-                while (_markerLayer.numChildren > numNodes) {
+                while (container.numChildren > numNodes) {
             
-                    const markerToRemove:UIComponent = UIComponent(_markerLayer.getChildAt(_markerLayer.numChildren - 1));
+                    const markerToRemove:UIComponent = UIComponent(container.getChildAt(container.numChildren - 1));
                     _detachListeners(markerToRemove);
-                    _markerLayer.removeChild(markerToRemove);
-                    markersFactory.takeBack(markerToRemove);
+                    container.removeChild(markerToRemove);
+                    _markersFactory.takeBack(markerToRemove);
                 }
             }
             
@@ -794,15 +797,22 @@
                 mouseChildren = true;
                 mouseEnabled = true;
             
+                // Clear the "screen points" snapshot.
+                _oldScreenPoints = null;
+            
                 // Convert the new coordinates markers were dragged to into logical points,
                 // and export them.
                 for (var i:int = 0; i < _nodes.length; i++) {
                     const node:Node = _nodes[i];
-                    const lx:Number = (node.screenX - _lastKnownCoords.plotsAreaX) / _lastKnownCoords.plotsAreaW;
+
+                    const lx:Number = (i === 0 || i === _nodes.length - 1) ? 0 :
+                        (node.screenX - _lastKnownCoords.plotsAreaX) / _lastKnownCoords.plotsAreaW;
                     node.logicalX = Math.max(0, Math.min(1, lx));
+
                     const ly:Number = 1 - ((node.screenY - _lastKnownCoords.plotsAreaY) / _lastKnownCoords.plotsAreaH);
                     node.logicalY = Math.max(0, Math.min(1, ly));
                 }
+            
                 _values = _exportNodes(_nodes);
                 dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
             
@@ -992,7 +1002,6 @@
             
             /**
              * Draw and position markers for the given points.
-             * Only redraws markers whose associated nodes are "dirty".
              */
             private function _updateMarkers(
                     nodes:Vector.<Node>,
