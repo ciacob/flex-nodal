@@ -51,11 +51,15 @@ package com.github.ciacob.flexnodal.utils {
         /**
          * Helper, reads a CSS style with a fallback value.
          *
-         * @param host - Host component to invoke `getStyle` on.
+         * @param host - Host to invoke `getStyle` on.
          * @param name - Name of the style to read.
          * @param fallback - Default value to assume if no style can be retrieved for given name.
          */
-        public static function $getStyle(host:UIComponent, name:String, fallback:*):* {
+        public static function $getStyle(host:*, name:String, fallback:*):* {
+            if (!host || !(host.getStyle is Function)) {
+                return fallback;
+            }
+
             var val:* = host.getStyle(name);
             if (val === undefined) {
                 return fallback;
@@ -157,15 +161,15 @@ package com.github.ciacob.flexnodal.utils {
 
         /**
          * Computes and returns a hue based on a base color and a factor. Uses the 360 degrees color hues circle model.
-         * 
+         *
          * @param   baseColor
-         *          The color to use as base for hie computation. Should not be black, or the computed hue will also be 
+         *          The color to use as base for hie computation. Should not be black, or the computed hue will also be
          *          black, regardless of the factor used.
-         * 
+         *
          * @param   hueFactor
          *          A factor to resolve to a hue offset to use, for shifting the current color (e.g., 0.5 means -180 degrees,
          *          which results in the chromatically opposite color).
-         * 
+         *
          * @return  The computed hue.
          */
         public static function getHue(baseColor:uint, hueFactor:Number = NaN):uint {

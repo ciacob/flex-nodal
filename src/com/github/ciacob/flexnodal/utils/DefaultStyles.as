@@ -27,5 +27,7 @@ package com.github.ciacob.flexnodal.utils {
 
         public static const DEFAULT_LINE_THICKNESS:uint = 2;
 
+        public static const DEFAULT_CHART_ALPHA: Number = 0.4;
+
     }
 }

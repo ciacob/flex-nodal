@@ -7,7 +7,7 @@
     preinitialize="_onPreinitialize()">
 
     <fx:Metadata>
-        [Style(name="chartBaseStyle", type="String", inherit="false")]
+        [Style(name="chartStyle", type="String", inherit="false")]
     </fx:Metadata>
 
     <fx:Script>
@@ -20,6 +20,12 @@
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
             import spark.components.Group;
+            import mx.styles.CSSStyleDeclaration;
+            import mx.styles.IStyleManager2;
+            
+            // Helper style manager for reading styles before they actually get
+            // applied to our component.
+            private static var _sm:IStyleManager2 = StyleManager.getStyleManager(null);
             
             // Bindable storage for the chart being currently on top of the
             // others, receiving editing actions and dispatching events.
@@ -30,6 +36,12 @@
             // chart layer (`null` if not applicable).
             [Bindable]
             private var _selectedNode:Array;
+            
+            // Storage for the extracted value of the `defaultAlpha` chart style.
+            // Defaults to `DefaultStyles.DEFAULT_CHART_ALPHA`, unless overridden.
+            // Charts display using default alpha unless selected, in which case
+            // they display at alpha `1`.
+            private var _defaultAlpha:Number = DefaultStyles.DEFAULT_CHART_ALPHA;
             
             /**
              * Storage for the provider of "drawables", UIComponent instances used
@@ -91,7 +103,7 @@
                     _populateChartLayers(_dataProvider);
                     _styleChartLayers();
             
-                    // Automatically set as `current` the last chat added.
+                    // Automatically set as `current` the last chart added.
                     const topChart:LineChartLayer = (chartLayers.numElements > 0) ?
                         chartLayers.getElementAt(chartLayers.numElements - 1) as LineChartLayer : null;
                     _setCurrentChart(topChart);
@@ -133,6 +145,7 @@
                 if (!chart.markersFactory) {
                     chart.markersFactory = _drawablesFactory;
                 }
+                chart.addEventListener(NodalEvent.LAYER_CLICK, _onLayerClick);
             }
             
             /**
@@ -140,8 +153,9 @@
              * sent back to the `_chartsFactory` for recycling.
              */
             private function _purgeChart(chart:LineChartLayer):void {
-                _unwireChart(chart);
                 chart.values = null;
+                _unwireChart(chart);
+                chart.removeEventListener(NodalEvent.LAYER_CLICK, _onLayerClick);
             }
             
             /**
@@ -200,16 +214,29 @@
                 if (!chartLayers || !chartLayers.numElements) {
                     return;
                 }
+            
+                // Read styles declaration.
+                const chartStyleName:* = getStyle('chartStyle');
+                if (chartStyleName === undefined) {
+                    return;
+                }
+                var chartStyleDecl:CSSStyleDeclaration = _sm.getStyleDeclaration('.' + chartStyleName);
+                if (!chartStyleDecl) {
+                    return;
+                }
+            
+                // Read styles.
                 const $g:Function = Helpers.$getStyle;
                 const $h:Function = Helpers.getHue;
+                const padding:uint = $g(chartStyleDecl, 'padding', DefaultStyles.DEFAULT_PADDING);
+                const lineThickness:uint = $g(chartStyleDecl, 'lineThickness', DefaultStyles.DEFAULT_LINE_THICKNESS);
+                const baseColor:uint = $g(chartStyleDecl, 'lineColor', DefaultStyles.DEFAULT_LINE_COLOR);
+                const baseColorOver:uint = $g(chartStyleDecl, 'lineColorOver', DefaultStyles.DEFAULT_LINE_COLOR_OVER);
+                const baseColorSelected:uint = $g(chartStyleDecl, 'lineColorSelected', DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
+                const baseColorAnchor:uint = $g(chartStyleDecl, 'lineColorAnchor', DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
+                _defaultAlpha = $g(chartStyleDecl, 'defaultAlpha', DefaultStyles.DEFAULT_CHART_ALPHA);
             
-                const padding:uint = $g(this, 'padding', DefaultStyles.DEFAULT_PADDING);
-                const lineThickness:uint = $g(this, 'lineThickness', DefaultStyles.DEFAULT_LINE_THICKNESS);
-                const baseColor:uint = $g(this, 'lineColor', DefaultStyles.DEFAULT_LINE_COLOR);
-                const baseColorOver:uint = $g(this, 'lineColorOver', DefaultStyles.DEFAULT_LINE_COLOR_OVER);
-                const baseColorSelected:uint = $g(this, 'lineColorSelected', DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
-                const baseColorAnchor:uint = $g(this, 'lineColorAnchor', DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
-            
+                // Set styles on each available chart. Also initialize chart alpha.
                 for (var i:int; i < chartLayers.numElements; i++) {
                     const hueFactor:Number = i / chartLayers.numElements;
                     const chart:LineChartLayer = chartLayers.getElementAt(i) as LineChartLayer;
@@ -223,6 +250,7 @@
                     $s('lineColorOver', $h(baseColorOver, hueFactor));
                     $s('lineColorSelected', $h(baseColorSelected, hueFactor));
                     $s('lineColorAnchor', $h(baseColorAnchor, hueFactor));
+                    chart.alpha = _defaultAlpha;
                 }
             }
             
@@ -231,17 +259,22 @@
              * subjecting it to external edit actions, such as deleting the selected nodes.
              */
             private function _setCurrentChart(chart:LineChartLayer):void {
-                if (chart === _currentChart) {
+
+                if (!chartLayers || !chartLayers.numElements || chart === _currentChart) {
                     return;
                 }
             
                 if (_currentChart) {
                     _unwireChart(_currentChart);
                     _currentChart.clearSelection();
+                    _currentChart.alpha = _defaultAlpha;
+                    _selectedNode = null;
                 }
                 if (chart) {
                     _currentChart = chart;
                     _wireChart(chart);
+                    chart.alpha = 1;
+                    chartLayers.setElementIndex(chart, chartLayers.numElements - 1);
                 }
             }
             
@@ -255,7 +288,6 @@
             
                 chart.removeEventListener(NodalEvent.SELECTION_CHANGE, _onSelectionChanged);
                 chart.removeEventListener(NodalEvent.NODES_CHANGE, _onNodesChanged);
-                chart.removeEventListener(NodalEvent.LAYER_CLICK, _onLayerClick);
             }
             
             /**
@@ -268,7 +300,6 @@
             
                 chart.addEventListener(NodalEvent.SELECTION_CHANGE, _onSelectionChanged);
                 chart.addEventListener(NodalEvent.NODES_CHANGE, _onNodesChanged);
-                chart.addEventListener(NodalEvent.LAYER_CLICK, _onLayerClick);
             }
             
             /**
@@ -300,21 +331,21 @@
                 if (!chart) {
                     return;
                 }
-                const chartIdx : int = chartLayers.getElementIndex(chart);
+                const chartIdx:int = chartLayers.getElementIndex(chart);
                 if (chartIdx === -1) {
                     return;
                 }
-
-                const dataset : Object = chartIdx < dataProvider.length? dataProvider[chartIdx] : null;
+            
+                const dataset:Object = chartIdx < dataProvider.length ? dataProvider[chartIdx] : null;
                 if (!dataset) {
                     return;
                 }
-
+            
                 dataset.values = chart.values;
-
+            
                 // Broadcast change. The updated set of values can be retrieved via the `dataProvider`
                 // accessor and the `chartIndex` provided by the `NodalEvent.CHART_DATA_CHANGE` event payload.
-                dispatchEvent(new NodalEvent (NodalEvent.CHART_DATA_CHANGE, {chartIndex: chartIdx, changedProp: 'values'}));
+                dispatchEvent(new NodalEvent(NodalEvent.CHART_DATA_CHANGE, {chartIndex: chartIdx, changedProp: 'values'}));
             
                 trace('==> chart values:', chart.values ? '[' + chart.values.join('] [') + ']' : 'NULL');
             }
@@ -341,15 +372,12 @@
         <!-- Controls bar -->
         <s:HGroup id="controls">
             <s:Button label="Clear selection"
-                enabled="{!!_selectedNode}"
-                click="{chart.clearSelection()}"/>
+                enabled="{!!_currentChart &amp;&amp; !!_selectedNode}"
+                click="{_currentChart.clearSelection()}"/>
 
             <s:Button label="Delete selection"
-                enabled="{!!_selectedNode}"
-                click="{chart.deleteSelection()}"/>
-
-            <s:Button label="{chart.enabled? 'Disable' : 'Enable'} chart"
-                click="{chart.enabled = !chart.enabled}"/>
+                enabled="{!!_currentChart &amp;&amp; !!_selectedNode}"
+                click="{_currentChart.deleteSelection()}"/>
 
         </s:HGroup>
 
@@ -361,29 +389,12 @@
             <components:BackgroundChartLayer
                 id="chartsBg"
                 width="100%" height="100%"
-                click="{chart.clearSelection()}"
                 />
 
             <!-- Container for all chart layers -->
             <s:Group id="chartLayers"
-                width="100%" height="100%">
-                <components:LineChartLayer
+                width="100%" height="100%"/>
 
-                    id="chart"
-                    layerName="Chart 1"
-                    width="100%" height="100%"
-                    lineColor="#000d43"
-                    lineColorOver="#0076bf"
-                    lineColorSelected="#00c8ff"
-                    lineColorAnchor="#9000ff"
-                    lineThickness="3"
-                    markersFactory="{_drawablesFactory}"
-                    values="{[ [0, 0.1], [0.5, 0.8], [0.95, 0], [1, 0] ]}"
-                    selectionChange="_onSelectionChanged (event)"
-                    nodesChange="_onNodesChanged (event)"
-                    layerClick="_onLayerClick(event)"/>
-
-            </s:Group>
         </s:Group>
     </s:VGroup>
 
