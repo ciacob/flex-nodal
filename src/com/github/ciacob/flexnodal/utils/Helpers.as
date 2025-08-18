@@ -99,16 +99,16 @@ package com.github.ciacob.flexnodal.utils {
 
         /**
          * Computes pixel coordinates and chart background geometry from existing nodes.
-         * 
+         *
          * @param   host
          *          The UIComponent hosting the chart whose coordinates are to be computed.
-         * 
+         *
          * @param   availableWidth
          *          The most up to date, precalculated width of the host.
-         * 
+         *
          * @param   availableHeight
          *          The most up to date, precalculated height of the host.
-         * 
+         *
          * @param   nodes
          *          Optional vector with all the logical "nodes" that represent this chart. If given, their `screenX` and `screenY` properties will be respectively calculated and set, as a side effect.
          */
@@ -153,6 +153,148 @@ package com.github.ciacob.flexnodal.utils {
                     bgAreaX, bgAreaY, bgAreaW, bgAreaH,
                     drawnMarkerRadius
                 );
+        }
+
+        /**
+         * Computes and returns a hue based on a base color and a factor. Uses the 360 degrees color hues circle model.
+         * 
+         * @param   baseColor
+         *          The color to use as base for hie computation. Should not be black, or the computed hue will also be 
+         *          black, regardless of the factor used.
+         * 
+         * @param   hueFactor
+         *          A factor to resolve to a hue offset to use, for shifting the current color (e.g., 0.5 means -180 degrees,
+         *          which results in the chromatically opposite color).
+         * 
+         * @return  The computed hue.
+         */
+        public static function getHue(baseColor:uint, hueFactor:Number = NaN):uint {
+            var newColor:uint = baseColor;
+
+            // Only compute the new color if a hue factor was given
+            if (!isNaN(hueFactor)) {
+
+                var r:uint = (baseColor >> 16) & 0xFF;
+                var g:uint = (baseColor >> 8) & 0xFF;
+                var b:uint = baseColor & 0xFF;
+
+                var hsv:Array = RGBtoHSV(r, g, b);
+                var h:Number = hsv[0], s:Number = hsv[1], v:Number = hsv[2];
+                h = (h + (hueFactor * 360 - 360)) % 360;
+
+                // Normalize to 0–360
+                if (h < 0) {
+                    h += 360;
+                }
+
+                var rgb:Array = HSVtoRGB(h, s, v);
+                newColor = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+            }
+
+            return newColor;
+        }
+
+        /**
+         * Converts Red, Green, Blue to Hue, Saturation, Value
+         * @r channel between 0-255
+         * @s channel between 0-255
+         * @v channel between 0-255
+         */
+        public static function RGBtoHSV(r:uint, g:uint, b:uint):Array {
+            var max:uint = Math.max(r, g, b);
+            var min:uint = Math.min(r, g, b);
+
+            var hue:Number = 0;
+            var saturation:Number = 0;
+            var value:Number = 0;
+
+            var hsv:Array = [];
+
+            // get Hue
+            if (max == min) {
+                hue = 0;
+            }
+            else if (max == r) {
+                hue = (60 * (g - b) / (max - min) + 360) % 360;
+            }
+            else if (max == g) {
+                hue = (60 * (b - r) / (max - min) + 120);
+            }
+            else if (max == b) {
+                hue = (60 * (r - g) / (max - min) + 240);
+            }
+
+            // get Value
+            value = max;
+
+            // get Saturation
+            if (max == 0) {
+                saturation = 0;
+            }
+            else {
+                saturation = (max - min) / max;
+            }
+
+            hsv = [Math.round(hue), Math.round(saturation * 100), Math.round(value / 255 * 100)];
+            return hsv;
+        }
+
+        /**
+         * Converts Hue, Saturation, Value to Red, Green, Blue
+         * @h Angle between 0-360
+         * @s percent between 0-100
+         * @v percent between 0-100
+         */
+        public static function HSVtoRGB(h:Number, s:Number, v:Number):Array {
+            var r:Number = 0;
+            var g:Number = 0;
+            var b:Number = 0;
+            var rgb:Array = [];
+
+            var tempS:Number = s / 100;
+            var tempV:Number = v / 100;
+
+            var hi:int = Math.floor(h / 60) % 6;
+            var f:Number = h / 60 - Math.floor(h / 60);
+            var p:Number = (tempV * (1 - tempS));
+            var q:Number = (tempV * (1 - f * tempS));
+            var t:Number = (tempV * (1 - (1 - f) * tempS));
+
+            switch (hi) {
+                case 0:
+                    r = tempV;
+                    g = t;
+                    b = p;
+                    break;
+                case 1:
+                    r = q;
+                    g = tempV;
+                    b = p;
+                    break;
+                case 2:
+                    r = p;
+                    g = tempV;
+                    b = t;
+                    break;
+                case 3:
+                    r = p;
+                    g = q;
+                    b = tempV;
+                    break;
+                case 4:
+                    r = t;
+                    g = p;
+                    b = tempV;
+                    break;
+                case 5:
+                    r = tempV;
+                    g = p;
+                    b = q;
+                    break;
+            }
+
+            rgb = [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+            return rgb;
         }
 
     }

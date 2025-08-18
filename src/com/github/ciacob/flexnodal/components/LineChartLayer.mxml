@@ -86,9 +86,9 @@
             // be used computing new points based on the dragging delta.
             private var _oldScreenPoints:Vector.<Point>;
             
-            // -------------------
+            // ----------------------
             // The `values` property
-            // -------------------
+            // ----------------------
             
             // Holder of all raw VALUES that define this line chart.
             // Values are user-provided doublets of abstract and
@@ -106,8 +106,7 @@
             private var _valuesChanged:Boolean = false;
             
             /**
-             * Sets a new set of values. Cause the chart to be
-             * updated.
+             * Sets new values. Causes the chart to be updated.
              */
             [Bindable]
             public function set values(value:Array):void {
