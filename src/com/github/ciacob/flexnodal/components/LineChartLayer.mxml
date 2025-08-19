@@ -86,43 +86,48 @@
             // be used computing new points based on the dragging delta.
             private var _oldScreenPoints:Vector.<Point>;
             
-            // ----------------------
-            // The `values` property
-            // ----------------------
+            // ---------------------------
+            // The `dataProvider` property
+            // ---------------------------
             
-            // Holder of all raw VALUES that define this line chart.
-            // Values are user-provided doublets of abstract and
-            // normalized [x,y] values, e.g.:
+            // An Object, containing at the very least a `values` Array
+            // property, preferably also containing a `name` and `colorIndex`.
+            
+            // The `values` property is expected to hold all logical [x,y]
+            // points that define this line chart.
+            // 
+            // More specifically, `values` should be an Array of user-provided
+            // doublets of abstract and normalized [x,y] values, such as:
             // [ [0,0], [0.5,1], [1,0] ]
             // 
-            // The above abstractly defines a simple chart line
+            // The above abstractly define a simple chart line
             // that starts and ends at the very bottom on the Y axis,
             // while climbing fully in its middle (on the X axis),
             // thus creating a simple "hill" profile.
-            private var _values:Array;
+            private var _dataProvider:Object;
             
             // Flag to raise when the client code has externally changed
-            // the input values.
-            private var _valuesChanged:Boolean = false;
+            // the input data provider.
+            private var _dataProviderChanged:Boolean = false;
             
             /**
-             * Sets new values. Causes the chart to be updated.
+             * Sets a new data provider. Causes the chart to be updated.
              */
             [Bindable]
-            public function set values(value:Array):void {
-                if (_values !== value) {
-                    _values = value;
-                    _valuesChanged = true;
+            public function set dataProvider(value:Object):void {
+                if (_dataProvider !== value) {
+                    _dataProvider = value;
+                    _dataProviderChanged = true;
                     invalidateProperties();
                 }
             }
             
             /**
-             * Gets the current set of values, which will reflect
-             * any changes the user made to the chart (e.g., via mouse).
+             * Gets the current data provider. Its `values` will reflect
+             * any changes the user has made to the chart meanwhile.
              */
-            public function get values():Array {
-                return _values;
+            public function get dataProvider():Object {
+                return _dataProvider;
             }
             
             // -------------------------------
@@ -157,12 +162,18 @@
             }
             
             // ------------------------
-            // The `layerName` property
+            // The `chartName` property
             // ------------------------
             
-            // An optional name to use for this chart
-            [Bindable]
-            public var layerName:String;
+            // An immutable name to use for identifying this chart
+            private var _chartName:String;
+            
+            // Returns the name of this chart, either the one explicitly provided
+            // via its data provider, or a generated one.
+            public function get chartName():String {
+                return _chartName;
+            
+            }
             
             // ----------------------
             // The `enabled` property
@@ -263,7 +274,7 @@
                     _nodes = _proofNodes(_nodes);
                     _provisionMarkers(_nodes, _markerLayer);
                     invalidateDisplayList();
-                    _values = _exportNodes(_nodes);
+                    _dataProvider.values = _exportNodes(_nodes);
                     if (dispatch) {
                         dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
                     }
@@ -300,10 +311,19 @@
             override protected function commitProperties():void {
                 super.commitProperties();
             
-                if (_valuesChanged) {
-                    _valuesChanged = false;
-                    _nodes = _importValues(_values);
+                if (_dataProviderChanged) {
+                    _dataProviderChanged = false;
+
+                    // Set nodes.
+                    _nodes = _importValues(_dataProvider ? _dataProvider.values : null);
             
+                    // Set chart name.
+                    _chartName = this.uid;
+                    if (_dataProvider && _dataProvider.name) {
+                        _chartName = Helpers.trim(_dataProvider.name) || _chartName;
+                    }
+            
+                    // Set up the selection manager.
                     if (!_selectionManager) {
                         _selectionManager = new SelectionManager(_nodes);
                     }
@@ -311,7 +331,10 @@
                         _selectionManager.nodes = _nodes;
                     }
             
+                    // Ensure there are as many markers as there are nodes.
                     _provisionMarkers(_nodes, _markerLayer);
+
+                    // Schedule a redraw.
                     invalidateDisplayList();
                 }
             
@@ -457,7 +480,7 @@
                 invalidateDisplayList();
             
                 // Broadcast the changes.
-                _values = _exportNodes(_nodes);
+                _dataProvider.values = _exportNodes(_nodes);
                 if (dispatch) {
                     dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
                 }
@@ -588,7 +611,7 @@
              * a NodalEvent.LAYER_CLICK event.
              */
             private function _onChartClicked(event:MouseEvent):void {
-                dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, layerName));
+                dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, chartName));
             }
             
             /**
@@ -676,7 +699,7 @@
                         // Mouse down on a non-synthetic node sets up dragging. Whether dragging actually occurs
                         // depends on the mouse being moved BEFORE a mouse up event is fired.
                     case MouseEvent.MOUSE_DOWN:
-                        dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, layerName));
+                        dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, chartName));
                         if (!stage ||
                                 node.isSynthetic ||
                                 isNaN(node.screenX) ||
@@ -812,7 +835,7 @@
                     node.logicalY = Math.max(0, Math.min(1, ly));
                 }
             
-                _values = _exportNodes(_nodes);
+                _dataProvider.values = _exportNodes(_nodes);
                 dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
             
                 // Recompute the dragging bounds based on the (likely changed) node values.

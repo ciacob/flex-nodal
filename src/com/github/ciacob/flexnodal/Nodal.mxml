@@ -8,6 +8,8 @@
 
     <fx:Metadata>
         [Style(name="chartStyle", type="String", inherit="false")]
+        
+        [Event(name="chartActivation", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
     <fx:Script>
@@ -22,6 +24,7 @@
             import spark.components.Group;
             import mx.styles.CSSStyleDeclaration;
             import mx.styles.IStyleManager2;
+            import com.github.ciacob.flexnodal.Nodal;
             
             // Helper style manager for reading styles before they actually get
             // applied to our component.
@@ -93,6 +96,33 @@
             }
             
             /**
+             * Causes a specified chart item to become active, i.e., drawn on
+             * top of the others, and completely opaque.
+             *
+             * @param   item
+             *          The data provider associated to the chart to be
+             *          made active.
+             */
+            public function set activeChartItem(item:Object):void {
+                if (!item || !_dataProvider || !chartLayers || !chartLayers.numElements) {
+                    return;
+                }
+            
+                var chart:LineChartLayer = null;
+                for (var i:int = 0; i < chartLayers.numElements; i++) {
+                    chart = chartLayers.getElementAt(i) as LineChartLayer;
+                    if (!chart) {
+                        continue;
+                    }
+                    if (chart.dataProvider === item) {
+                        break;
+                    }
+                }
+            
+                _setCurrentChart(chart);
+            }
+            
+            /**
              * Overridden to update layers as needed.
              */
             override protected function commitProperties():void {
@@ -107,6 +137,7 @@
                     const topChart:LineChartLayer = (chartLayers.numElements > 0) ?
                         chartLayers.getElementAt(chartLayers.numElements - 1) as LineChartLayer : null;
                     _setCurrentChart(topChart);
+                    dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
             
                     invalidateDisplayList();
                 }
@@ -153,7 +184,7 @@
              * sent back to the `_chartsFactory` for recycling.
              */
             private function _purgeChart(chart:LineChartLayer):void {
-                chart.values = null;
+                chart.dataProvider = null;
                 _unwireChart(chart);
                 chart.removeEventListener(NodalEvent.LAYER_CLICK, _onLayerClick);
             }
@@ -163,10 +194,10 @@
              * charts.
              */
             private function _provisionChartLayers(_dataProvider:ArrayCollection, container:Group):void {
-                if (!_chartsFactory || !dataProvider) {
+                if (!_chartsFactory || !_dataProvider) {
                     return;
                 }
-                const numCharts:uint = dataProvider.length;
+                const numCharts:uint = _dataProvider.length;
             
                 // Append
                 while (container.numElements < numCharts) {
@@ -190,17 +221,14 @@
              * to the available charts.
              */
             private function _populateChartLayers(_dataProvider:ArrayCollection):void {
-                if (!_dataProvider || !chartLayers) {
+                if (!_dataProvider || !_dataProvider.length || !chartLayers) {
                     return;
                 }
             
-                for (var i:int = 0; i < dataProvider.length; i++) {
-                    const chartName:String = dataProvider[i] ? dataProvider[i].name : "Chart " + i;
-                    const chartValues:Array = dataProvider[i] ? dataProvider[i].values : null;
+                for (var i:int = 0; i < _dataProvider.length; i++) {
                     const chart:LineChartLayer = chartLayers.getElementAt(i) as LineChartLayer;
                     if (chart) {
-                        chart.layerName = chartName;
-                        chart.values = chartValues;
+                        chart.dataProvider = _dataProvider[i];
                     }
                 }
             }
@@ -269,6 +297,7 @@
                     _currentChart.clearSelection();
                     _currentChart.alpha = _defaultAlpha;
                     _selectedNode = null;
+                    _currentChart = null;
                 }
                 if (chart) {
                     _currentChart = chart;
@@ -324,7 +353,7 @@
              * event.
              */
             private function _onNodesChanged(event:NodalEvent):void {
-                if (!dataProvider || !chartLayers || !chartLayers.numElements) {
+                if (!_dataProvider || !chartLayers || !chartLayers.numElements) {
                     return;
                 }
                 const chart:LineChartLayer = event.target as LineChartLayer;
@@ -336,18 +365,15 @@
                     return;
                 }
             
-                const dataset:Object = chartIdx < dataProvider.length ? dataProvider[chartIdx] : null;
-                if (!dataset) {
+                const chartDp:Object = chartIdx < _dataProvider.length ? _dataProvider[chartIdx] : null;
+                if (!chartDp) {
                     return;
                 }
             
-                dataset.values = chart.values;
-            
-                // Broadcast change. The updated set of values can be retrieved via the `dataProvider`
-                // accessor and the `chartIndex` provided by the `NodalEvent.CHART_DATA_CHANGE` event payload.
-                dispatchEvent(new NodalEvent(NodalEvent.CHART_DATA_CHANGE, {chartIndex: chartIdx, changedProp: 'values'}));
-            
-                trace('==> chart values:', chart.values ? '[' + chart.values.join('] [') + ']' : 'NULL');
+                dispatchEvent(new NodalEvent(NodalEvent.CHART_DATA_CHANGE, {
+                                changedIndex: chartIdx,
+                                changedData: chartDp
+                            }));
             }
             
             /**
@@ -360,7 +386,7 @@
                     return;
                 }
                 _setCurrentChart(chart);
-                trace('~~~> layer clicked:', event.payload, event.target);
+                dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, chart.dataProvider));
             }
         ]]>
     </fx:Script>
