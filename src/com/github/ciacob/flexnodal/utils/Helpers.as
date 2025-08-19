@@ -8,6 +8,16 @@ package com.github.ciacob.flexnodal.utils {
     public class Helpers {
 
         /**
+         * Trims given string
+         */
+        public static function trim(value:String):String {
+            if (value) {
+                return value.replace(/^\s+|\s+$/g, '');
+            }
+            return value;
+        }
+
+        /**
          * To be used with Array/Vector `sort()`. Sorts a Nodes by their `nx` field.
          * @see Array.sort()
          */

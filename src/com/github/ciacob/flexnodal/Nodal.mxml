@@ -259,7 +259,7 @@
              * subjecting it to external edit actions, such as deleting the selected nodes.
              */
             private function _setCurrentChart(chart:LineChartLayer):void {
-
+            
                 if (!chartLayers || !chartLayers.numElements || chart === _currentChart) {
                     return;
                 }
@@ -368,18 +368,6 @@
     <!-- Main container -->
     <s:VGroup width="100%" height="100%"
         horizontalAlign="center">
-
-        <!-- Controls bar -->
-        <s:HGroup id="controls">
-            <s:Button label="Clear selection"
-                enabled="{!!_currentChart &amp;&amp; !!_selectedNode}"
-                click="{_currentChart.clearSelection()}"/>
-
-            <s:Button label="Delete selection"
-                enabled="{!!_currentChart &amp;&amp; !!_selectedNode}"
-                click="{_currentChart.deleteSelection()}"/>
-
-        </s:HGroup>
 
         <!-- The stack of layers (background and chart lines). -->
         <s:Group id="layersStack"
