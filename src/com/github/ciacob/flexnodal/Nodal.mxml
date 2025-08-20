@@ -30,12 +30,7 @@
             // applied to our component.
             private static var _sm:IStyleManager2 = StyleManager.getStyleManager(null);
             
-            // Bindable storage for the chart being currently on top of the
-            // others, receiving editing actions and dispatching events.
-            [Bindable]
-            private var _currentChart:LineChartLayer;
-            
-            // Bindable storage for the currently selected node of the current
+            // Bindable storage for the currently selected node of the active
             // chart layer (`null` if not applicable).
             [Bindable]
             private var _selectedNode:Array;
@@ -95,6 +90,65 @@
                 }
             }
             
+            // ----------------------------
+            // The `operatingMode` property
+            // ----------------------------
+            public static const NORMAL:int = 0;
+            public static const EXCLUSIVE:int = 1;
+            public static const ISOLATED:int = 2;
+            
+            // Storage for the `operatingMode` property
+            private var _operatingMode:int = NORMAL;
+            
+            // Flag we raise when the `operatingMode` property has been externally
+            // changed.
+            private var _operatingModeChanged:Boolean;
+            
+            /**
+             * Returns the current operating mode for this component. Returned value
+             * is one of the `NORMAL`, `EXCLUSIVE` or `ISOLATED` constants defined by
+             * this class.
+             *
+             * NORMAL allows immediate access to all charts via clicking their lines.
+             * The active chart is fully opaque while the others are semi-transparent.
+             * Both active and inactive charts display selectable and draggable nodes.
+             *
+             * EXCLUSIVE allows access to only the active chart, but other charts can
+             * still be accessed by activating them programmatically, via setting
+             * `activeChartItem`. Inactive charts do not display nodes, and clicking
+             * their lines does not make them active. Useful when user needs to focus on
+             * editing the active chart, while still maintaining context awareness.
+             *
+             * ISOLATED only displays the active chart. Inactive charts can only be
+             * shown and accessed by activating programmatically, via setting
+             * `activeChartItem`. Useful in overly elaborate contexts, where identifying
+             * and editing the active chart becomes challenging.
+             */
+            public function get operatingMode():int {
+                return _operatingMode;
+            }
+            
+            /**
+             * Sets the operating mode of this component.
+             * @see get operatingMode
+             */
+            public function set operatingMode(value:int):void {
+                if (value != _operatingMode) {
+                    _operatingMode = value;
+                    _operatingModeChanged = true;
+                    invalidateProperties();
+                }
+            }
+            
+            // ------------------------------
+            // The `activeChartItem` property
+            // ------------------------------
+            
+            // Bindable storage for the chart being currently on top of the
+            // others, receiving editing actions and dispatching events.
+            [Bindable]
+            private var _activeChart:LineChartLayer;
+            
             /**
              * Causes a specified chart item to become active, i.e., drawn on
              * top of the others, and completely opaque.
@@ -119,7 +173,9 @@
                     }
                 }
             
-                _setCurrentChart(chart);
+                _setActiveChart(chart);
+                _setChartsAvailability(_operatingMode);
+                invalidateDisplayList();
             }
             
             /**
@@ -127,18 +183,27 @@
              */
             override protected function commitProperties():void {
                 super.commitProperties();
+            
+                // Data provider
                 if (_dataProviderChanged) {
+            
                     _dataProviderChanged = false;
                     _provisionChartLayers(_dataProvider, chartLayers);
                     _populateChartLayers(_dataProvider);
                     _styleChartLayers();
             
-                    // Automatically set as `current` the last chart added.
-                    const topChart:LineChartLayer = (chartLayers.numElements > 0) ?
+                    // Automatically activate the last chart added.
+                    const topChart:LineChartLayer = (chartLayers && chartLayers.numElements > 0) ?
                         chartLayers.getElementAt(chartLayers.numElements - 1) as LineChartLayer : null;
-                    _setCurrentChart(topChart);
+                    _setActiveChart(topChart);
                     dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
+                    invalidateDisplayList();
+                }
             
+                // Operating mode
+                if (_operatingModeChanged) {
+                    _operatingModeChanged = false;
+                    _setChartsAvailability(_operatingMode);
                     invalidateDisplayList();
                 }
             }
@@ -278,32 +343,55 @@
                     $s('lineColorOver', $h(baseColorOver, hueFactor));
                     $s('lineColorSelected', $h(baseColorSelected, hueFactor));
                     $s('lineColorAnchor', $h(baseColorAnchor, hueFactor));
+            
                     chart.alpha = _defaultAlpha;
                 }
             }
             
             /**
-             * Sets given `chart` as current, hooking it up for event listeners, and also
-             * subjecting it to external edit actions, such as deleting the selected nodes.
+             * Sets charts as editable and/or visible based on their `active` status and the given
+             * `operatingMode`.
              */
-            private function _setCurrentChart(chart:LineChartLayer):void {
+            private function _setChartsAvailability(operatingMode:int):void {
+                if (!chartLayers || !chartLayers.numElements) {
+                    return;
+                }
+                for (var i:int; i < chartLayers.numElements; i++) {
+                    const chart:LineChartLayer = chartLayers.getElementAt(i) as LineChartLayer;
+                    if (!chart) {
+                        continue;
+                    }
+                    chart.editable = (_activeChart === chart) || (_operatingMode === NORMAL);
+                    chart.visible = (_activeChart === chart) || (operatingMode !== ISOLATED);
+                }
+            }
             
-                if (!chartLayers || !chartLayers.numElements || chart === _currentChart) {
+            /**
+             * Activates given `chart`, hooking it up for event listeners, and also
+             * subjecting it to external edit actions, such as deleting its selected nodes.
+             */
+            private function _setActiveChart(chart:LineChartLayer):void {
+            
+                if (!chartLayers || !chartLayers.numElements || chart === _activeChart) {
                     return;
                 }
             
-                if (_currentChart) {
-                    _unwireChart(_currentChart);
-                    _currentChart.clearSelection();
-                    _currentChart.alpha = _defaultAlpha;
+                if (_activeChart) {
+                    _unwireChart(_activeChart);
+                    _activeChart.clearSelection();
+            
+                    _activeChart.alpha = _defaultAlpha;
                     _selectedNode = null;
-                    _currentChart = null;
+                    _activeChart = null;
                 }
                 if (chart) {
-                    _currentChart = chart;
+                    _activeChart = chart;
                     _wireChart(chart);
+            
                     chart.alpha = 1;
-                    chartLayers.setElementIndex(chart, chartLayers.numElements - 1);
+                    if (chartLayers.getElementAt(chartLayers.numElements - 1) !== chart) {
+                        chartLayers.setElementIndex(chart, chartLayers.numElements - 1);
+                    }
                 }
             }
             
@@ -341,7 +429,7 @@
             }
             
             /**
-             * Listener. Executed when the current chart layer dispatched a `selectionChange`
+             * Listener. Executed when the active chart layer dispatched a `selectionChange`
              * event.
              */
             private function _onSelectionChanged(event:NodalEvent):void {
@@ -349,7 +437,7 @@
             }
             
             /**
-             * Listener. Executed when the current chart layer dispatched a `nodesChange`
+             * Listener. Executed when the active chart layer dispatches a `nodesChange`
              * event.
              */
             private function _onNodesChanged(event:NodalEvent):void {
@@ -377,15 +465,19 @@
             }
             
             /**
-             * Listener. Dispatched when the current chart layer dispatched a `layerClick`
-             * event.
+             * Listener. Executed when the active chart layer dispatches a `layerClick`
+             * event. If operating mode allows, causes the clicked chart to become active
+             * and dispatches a NodalEvent.CHART_ACTIVATION event.
              */
             private function _onLayerClick(event:NodalEvent):void {
+                if (_operatingMode !== NORMAL) {
+                    return;
+                }
                 const chart:LineChartLayer = event.target as LineChartLayer;
                 if (!chart) {
                     return;
                 }
-                _setCurrentChart(chart);
+                _setActiveChart(chart);
                 dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, chart.dataProvider));
             }
         ]]>

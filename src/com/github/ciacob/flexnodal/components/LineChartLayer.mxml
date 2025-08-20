@@ -176,39 +176,39 @@
             }
             
             // ----------------------
-            // The `enabled` property
+            // The `editable` property
             // ----------------------
             
             /**
-             * Storage for the `enabled` property.
+             * Storage for the `editable` property.
              */
-            private var _enabled:Boolean = true;
+            private var _editable:Boolean = true;
             
             /**
-             * Flag to raise when the `_enabled` property has been externally changed.
+             * Flag to raise when the `editable` property has been externally changed.
              */
-            private var _enabledChanged:Boolean;
+            private var _editableChanged:Boolean;
             
             /**
-             * Gets the current value of the `enabled` property.
+             * Gets the current value of the `editable` property.
              */
-            override public function get enabled():Boolean {
-                return _enabled;
+            public function get editable():Boolean {
+                return _editable;
             }
             
             /**
-             * Sets the `enabled` property. Setting this property to `false`
+             * Sets the `editable` property. Setting this property to `false`
              * causes the chart to not display nodes/markers. Also, double-clicking
              * a chart line does not result in creating a node anymore. `LAYER_CLICK`
              * events will still be dispatched.
              *
-             * Note: by default, all charts are created as enabled.
+             * Note: by default, all charts are created as editable.
              */
             [Bindable]
-            override public function set enabled(value:Boolean):void {
-                if (value !== _enabled) {
-                    _enabled = value;
-                    _enabledChanged = true;
+            public function set editable(value:Boolean):void {
+                if (value !== _editable) {
+                    _editable = value;
+                    _editableChanged = true;
                     invalidateProperties();
                 }
             }
@@ -313,7 +313,7 @@
             
                 if (_dataProviderChanged) {
                     _dataProviderChanged = false;
-
+            
                     // Set nodes.
                     _nodes = _importValues(_dataProvider ? _dataProvider.values : null);
             
@@ -333,7 +333,7 @@
             
                     // Ensure there are as many markers as there are nodes.
                     _provisionMarkers(_nodes, _markerLayer);
-
+            
                     // Schedule a redraw.
                     invalidateDisplayList();
                 }
@@ -343,14 +343,15 @@
                     invalidateDisplayList();
                 }
             
-                if (_enabledChanged) {
-                    _enabledChanged = false;
-                    if (_selectionManager && !_enabled) {
+                if (_editableChanged) {
+                    _editableChanged = false;
+                    if (_selectionManager && !_editable) {
                         _selectionManager.clearSelection();
                         _broadcastSelection();
                         _dragBoundsChanged = true;
                     }
                     _provisionMarkers(_nodes, _markerLayer);
+                    _chartLayer.buttonMode = _chartLayer.useHandCursor = _editable;
                     invalidateDisplayList();
                 }
             }
@@ -562,7 +563,7 @@
                 if (!_markersFactory) {
                     return;
                 }
-                const numNodes:uint = _enabled ? nodes.length : 0;
+                const numNodes:uint = _editable ? nodes.length : 0;
             
                 // Append
                 while (container.numChildren < numNodes) {
@@ -620,7 +621,7 @@
              * the user double-clicked.
              */
             private function _onChartDoubleClicked(event:MouseEvent):void {
-                if (!_enabled ||
+                if (!_editable ||
                         !event || isNaN(event.localX) || isNaN(event.localY) ||
                         !_chartLayer ||
                         !_lastKnownCoords) {
@@ -990,7 +991,7 @@
                 _drawChartLines(g, nodes, thickness, lineColor);
             
                 // 3) Draw and place markers whose nodes are dirty.
-                if (_enabled) {
+                if (_editable) {
             
                     _updateMarkers(
                             nodes,
