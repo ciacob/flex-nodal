@@ -9,6 +9,8 @@
     <fx:Metadata>
         [Style(name="chartStyle", type="String", inherit="false")]
         
+        [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="chartDataChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
         [Event(name="chartActivation", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
@@ -29,11 +31,6 @@
             // Helper style manager for reading styles before they actually get
             // applied to our component.
             private static var _sm:IStyleManager2 = StyleManager.getStyleManager(null);
-            
-            // Bindable storage for the currently selected node of the active
-            // chart layer (`null` if not applicable).
-            [Bindable]
-            private var _selectedNode:Array;
             
             // Storage for the extracted value of the `defaultAlpha` chart style.
             // Defaults to `DefaultStyles.DEFAULT_CHART_ALPHA`, unless overridden.
@@ -177,6 +174,28 @@
                 _setChartsAvailability(_operatingMode);
                 invalidateDisplayList();
             }
+
+            /**
+             * Unselects all selected nodes of the active chart, if applicable.
+             * Dispatches a `NodalEvent.SELECTION_CHANGE` event.
+             */
+            public function clearSelection () : void {
+                if (!_activeChart) {
+                    return;
+                }
+                _activeChart.clearSelection();
+            }
+
+            /**
+             * Deletes all selected nodes of the active chart, if applicable.
+             * Dispatches a `Nodal.CHART_DATA_CHANGE` event.
+             */
+            public function deleteSelection () : void {
+                if (!_activeChart) {
+                    return;
+                }
+                _activeChart.deleteSelection(false);
+            }
             
             /**
              * Overridden to update layers as needed.
@@ -191,6 +210,7 @@
                     _provisionChartLayers(_dataProvider, chartLayers);
                     _populateChartLayers(_dataProvider);
                     _styleChartLayers();
+                    _styleBackgroundLayer();
             
                     // Automatically activate the last chart added.
                     const topChart:LineChartLayer = (chartLayers && chartLayers.numElements > 0) ?
@@ -299,35 +319,82 @@
             }
             
             /**
+             * Returns the CSSStyleDeclaration referenced by the `chartStyle` style.
+             *
+             * `chartStyle` itself is only a string (a CSS class name, e.g. ".myChartStyle");
+             * this method resolves it to the actual declaration that contains the style rules.
+             *
+             * Returns `null` on failure.
+             */
+            private function _getChartStyles():CSSStyleDeclaration {
+                const chartStyleName:* = getStyle('chartStyle');
+                if (chartStyleName === undefined) {
+                    return null;
+                }
+            
+                var chartStyleDecl:CSSStyleDeclaration = _sm.getStyleDeclaration('.' + chartStyleName);
+                return chartStyleDecl;
+            }
+            
+            /**
+             * Styles the common background layer drawn underneath all charts.
+             */
+            private function _styleBackgroundLayer():void {
+                if (!backgroundLayer) {
+                    return;
+                }
+            
+                var chartStyles:CSSStyleDeclaration = _getChartStyles();
+                if (!chartStyles) {
+                    return;
+                }
+            
+                // Read styles.
+                const $g:Function = Helpers.$getStyle;
+                const padding:uint = $g(chartStyles, 'padding', DefaultStyles.DEFAULT_PADDING);
+                const layerColor:uint = $g(chartStyles, 'layerColor', DefaultStyles.DEFAULT_LAYER_COLOR);
+                const chartBg:uint = $g(chartStyles, 'chartBg', DefaultStyles.DEFAULT_CHART_BG);
+                const chartBgAlpha:Number = $g(chartStyles, 'chartBgAlpha', DefaultStyles.DEFAULT_CHART_ALPHA);
+                const xAxisColor:uint = $g(chartStyles, 'xAxisColor', DefaultStyles.DEFAULT_X_AXIS_COLOR);
+                const xAxisAlpha:Number = $g(chartStyles, 'xAxisAlpha', DefaultStyles.DEFAULT_X_AXIS_ALPHA);
+                const yAxisColor:uint = $g(chartStyles, 'yAxisColor', DefaultStyles.DEFAULT_Y_AXIS_COLOR);
+                const yAxisAlpha:Number = $g(chartStyles, 'yAxisAlpha', DefaultStyles.DEFAULT_Y_AXIS_ALPHA);
+            
+                // Set styles
+                backgroundLayer.setStyle('padding', padding);
+                backgroundLayer.setStyle('layerColor', layerColor);
+                backgroundLayer.setStyle('chartBg', chartBg);
+                backgroundLayer.setStyle('chartBgAlpha', chartBgAlpha);
+                backgroundLayer.setStyle('xAxisColor', xAxisColor);
+                backgroundLayer.setStyle('xAxisAlpha', xAxisAlpha);
+                backgroundLayer.setStyle('yAxisColor', yAxisColor);
+                backgroundLayer.setStyle('yAxisAlpha', yAxisAlpha);
+            }
+            
+            /**
              * Compiles a set of colors for each provisioned chart layer, based on a
-             * provided base color. Passes on common styles, such as padding or line
-             * thickness. Sets compiled styles to each chart, respectively.
+             * provided base color. Sets compiled styles to each chart, respectively.
              */
             private function _styleChartLayers():void {
                 if (!chartLayers || !chartLayers.numElements) {
                     return;
                 }
             
-                // Read styles declaration.
-                const chartStyleName:* = getStyle('chartStyle');
-                if (chartStyleName === undefined) {
-                    return;
-                }
-                var chartStyleDecl:CSSStyleDeclaration = _sm.getStyleDeclaration('.' + chartStyleName);
-                if (!chartStyleDecl) {
+                var chartStyles:CSSStyleDeclaration = _getChartStyles();
+                if (!chartStyles) {
                     return;
                 }
             
                 // Read styles.
                 const $g:Function = Helpers.$getStyle;
                 const $h:Function = Helpers.getHue;
-                const padding:uint = $g(chartStyleDecl, 'padding', DefaultStyles.DEFAULT_PADDING);
-                const lineThickness:uint = $g(chartStyleDecl, 'lineThickness', DefaultStyles.DEFAULT_LINE_THICKNESS);
-                const baseColor:uint = $g(chartStyleDecl, 'lineColor', DefaultStyles.DEFAULT_LINE_COLOR);
-                const baseColorOver:uint = $g(chartStyleDecl, 'lineColorOver', DefaultStyles.DEFAULT_LINE_COLOR_OVER);
-                const baseColorSelected:uint = $g(chartStyleDecl, 'lineColorSelected', DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
-                const baseColorAnchor:uint = $g(chartStyleDecl, 'lineColorAnchor', DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
-                _defaultAlpha = $g(chartStyleDecl, 'defaultAlpha', DefaultStyles.DEFAULT_CHART_ALPHA);
+                const padding:uint = $g(chartStyles, 'padding', DefaultStyles.DEFAULT_PADDING);
+                const lineThickness:uint = $g(chartStyles, 'lineThickness', DefaultStyles.DEFAULT_LINE_THICKNESS);
+                const baseColor:uint = $g(chartStyles, 'lineColor', DefaultStyles.DEFAULT_LINE_COLOR);
+                const baseColorOver:uint = $g(chartStyles, 'lineColorOver', DefaultStyles.DEFAULT_LINE_COLOR_OVER);
+                const baseColorSelected:uint = $g(chartStyles, 'lineColorSelected', DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
+                const baseColorAnchor:uint = $g(chartStyles, 'lineColorAnchor', DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
+                _defaultAlpha = $g(chartStyles, 'defaultAlpha', DefaultStyles.DEFAULT_CHART_ALPHA);
             
                 // Set styles on each available chart. Also initialize chart alpha.
                 for (var i:int; i < chartLayers.numElements; i++) {
@@ -381,7 +448,6 @@
                     _activeChart.clearSelection();
             
                     _activeChart.alpha = _defaultAlpha;
-                    _selectedNode = null;
                     _activeChart = null;
                 }
                 if (chart) {
@@ -433,7 +499,9 @@
              * event.
              */
             private function _onSelectionChanged(event:NodalEvent):void {
-                _selectedNode = event.payload ? event.payload.selectedNode : null;
+            
+                // Re-dispatch on current target
+                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_CHANGE, event.payload));
             }
             
             /**
@@ -448,13 +516,14 @@
                 if (!chart) {
                     return;
                 }
-                const chartIdx:int = chartLayers.getElementIndex(chart);
-                if (chartIdx === -1) {
+            
+                const chartDp:Object = chart.dataProvider;
+                if (!chartDp) {
                     return;
                 }
             
-                const chartDp:Object = chartIdx < _dataProvider.length ? _dataProvider[chartIdx] : null;
-                if (!chartDp) {
+                const chartIdx:int = _dataProvider.getItemIndex(chartDp);
+                if (chartIdx === -1) {
                     return;
                 }
             
@@ -493,7 +562,7 @@
 
             <!-- Common background for all charts. -->
             <components:BackgroundChartLayer
-                id="chartsBg"
+                id="backgroundLayer"
                 width="100%" height="100%"
                 />
 

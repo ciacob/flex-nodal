@@ -72,6 +72,10 @@
             
             // Flag we raise during marker dragging.
             private var _nowDragging:Boolean;
+
+            // Flag we raise when at least one "mouseMove" Event is registered
+            // during an initiated node dragging operation.
+            private var _haveActualDrag:Boolean;
             
             // Storage for the offset between the grabbing spot and the anchor
             // point of the marker being dragged, in stage coordinates.
@@ -779,6 +783,9 @@
                 if (!numSelNodes) {
                     return;
                 }
+
+                // Raise a flag to mark current drag session as fertile.
+                _haveActualDrag = true;
             
                 // Compute dragging delta and clamp it to the permitted dragging bounds.
                 const chartX:Number = event.stageX - _dragClickOffset.x;
@@ -822,6 +829,12 @@
             
                 // Clear the "screen points" snapshot.
                 _oldScreenPoints = null;
+
+                // Early exit if this dragging session was sterile (no actual dragging).
+                if (!_haveActualDrag) {
+                    _haveActualDrag = false;
+                    return;
+                }
             
                 // Convert the new coordinates markers were dragged to into logical points,
                 // and export them.
