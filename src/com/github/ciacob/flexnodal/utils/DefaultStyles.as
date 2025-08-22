@@ -1,6 +1,8 @@
 package com.github.ciacob.flexnodal.utils {
     public class DefaultStyles {
 
+        public static const DEFAULT_FONT_SIZE:uint = 12;
+
         public static const DEFAULT_PADDING:uint = 5;
 
         public static const DEFAULT_LAYER_COLOR:uint = 0xcccccc;
