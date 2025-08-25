@@ -80,7 +80,6 @@ package com.github.ciacob.flexnodal.components {
                 if (_label) {
                     if (!_labelComponent) {
                         _labelComponent = new Label;
-                        _labelComponent.percentWidth = 100;
                         _labelComponent.maxDisplayedLines = 1;
                         _labelComponent.showTruncationTip = false;
                         if (_labelStyleChanged) {
@@ -135,14 +134,17 @@ package com.github.ciacob.flexnodal.components {
             const g:Graphics = graphics;
             g.clear();
             g.beginFill(bgColor, bgAlpha);
-            g.drawRect(1, 1, uW - 2, uH - 2);
+            g.drawRect(0, 0, uW, uH);
 
             // Position and style the label, if any
             if (_labelComponent) {
 
                 // Bottom left, not changeable
-                _labelComponent.x = padding;
-                _labelComponent.y = uH - padding - _labelComponent.height;
+                const textPadding : Number = Math.max (2, padding / 2);
+                _labelComponent.x = textPadding;
+                _labelComponent.y = uH - textPadding - _labelComponent.height;
+                _labelComponent.maxWidth = Math.max (0, uW - padding * 2);
+                _labelComponent.maxHeight = Math.max (0, uH - padding * 2);
             }
         }
 
