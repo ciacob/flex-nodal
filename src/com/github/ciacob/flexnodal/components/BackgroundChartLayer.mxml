@@ -19,25 +19,95 @@
 
     <fx:Script>
         <![CDATA[
-            import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.ChartCoordinates;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
+            import mx.collections.ArrayCollection;
+            import com.github.ciacob.flexnodal.utils.InstanceFactory;
+            import com.github.ciacob.flexnodal.utils.InstanceFactory;
+            import com.github.ciacob.flexnodal.components.BackgroundCell;
+            import com.github.ciacob.flexnodal.components.BackgroundCell;
+            import com.github.ciacob.flexnodal.components.BackgroundCell;
+            import mx.collections.Sort;
+            import mx.collections.SortField;
             
             // The container to draw background decorations in
-            private var _bgLayer:UIComponent;
+            private var _bgLayer:Group;
+            
+            // Storage for the provider of "cells", BackgroundCell instances used
+            // to display the rows and columns of the grid.
+            private const _cellsFactory:InstanceFactory = new InstanceFactory(
+                    BackgroundCell,
+                    _initBgCell,
+                    _purgeBgCell
+                );
+            
+            // ---------------------------
+            // The `dataProvider` property
+            // ---------------------------
+            
+            // Storage for the `dataProvider` property.
+            private var _dataProvider:ArrayCollection;
+            
+            // Flag to raise when the `dataProvider` property has been
+            // externally changed.
+            private var _dataProviderChanged:Boolean;
             
             /**
+             * Returns the current data provider of this component.
+             *
+             * This collection supplies the grid segmentation drawn beneath
+             * the line charts, giving visual context for interpreting chart
+             * values.
+             */
+            public function get dataProvider():ArrayCollection {
+                return _dataProvider;
+            }
+            
+            /**
+             * Sets or replaces the data provider of this component.
+             *
+             * Setting this property marks the component’s grid data as
+             * changed and schedules a commit via `invalidateProperties()`.
+             */
+            [Bindable]
+            public function set dataProvider(value:ArrayCollection):void {
+                if (value !== _dataProvider) {
+                    _dataProvider = value;
+                    _dataProviderChanged = true;
+                    invalidateProperties();
+                }
+            }
+            
+            /**
+             * Overridden to create a canvas to draw background in.
              * @see Group.createChildren()
              */
             override protected function createChildren():void {
                 super.createChildren();
             
-                _bgLayer = new UIComponent();
+                _bgLayer = new Group();
                 addElement(_bgLayer);
             }
             
             /**
+             * Overridden to draw grid rows and columns.
+             * @see Group.commitProperties()
+             */
+            override protected function commitProperties():void {
+                super.commitProperties();
+            
+                // Data provider
+                if (_dataProviderChanged) {
+                    _dataProviderChanged = false;
+                    _provisionBgCells(_dataProvider, _bgLayer);
+                    _setupBgCells(_dataProvider);
+                    invalidateDisplayList();
+                }
+            }
+            
+            /**
+             * Overridden to position row and column background cells.
              * @see Group.updateDisplayList
              */
             override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
@@ -45,47 +115,216 @@
             
                 const coords:ChartCoordinates = Helpers.computeChartCoords(this, unscaledWidth, unscaledHeight);
                 _drawBackground(coords);
+                _plotGrid(coords);
             }
             
             /**
-             * Draws the background layers
+             * Function to be executed against every "cell" released by the `_cellsFactory`.
+             */
+            private function _initBgCell(cell:BackgroundCell):void {
+                // No-op
+            }
+            
+            /**
+             * Function to be executed against every decommissioned "cell" sent back to
+             * the `_cellsFactory` for recycling.
+             */
+            private function _purgeBgCell(cell:BackgroundCell):void {
+                cell.label = '';
+                cell.width = NaN;
+                cell.height = NaN;
+                cell.clearStyle('textFontSize');
+                cell.clearStyle('textColor');
+                cell.clearStyle('padding');
+                cell.clearStyle('bgColor');
+                cell.clearStyle('bgAlpha');
+            }
+            
+            /**
+             * Ensures the `_bgLayer` container contains the correct number of background cells.
+             */
+            private function _provisionBgCells(_dataProvider:ArrayCollection, container:Group):void {
+                if (!_cellsFactory || !_dataProvider || !container) {
+                    return;
+                }
+                const numCells:uint = _dataProvider.length;
+            
+                // Append
+                while (container.numElements < numCells) {
+                    const cellToAdd:BackgroundCell = BackgroundCell(_cellsFactory.give());
+                    container.addElement(cellToAdd);
+                }
+            
+                // Trim
+                while (container.numElements > numCells) {
+                    const cellToRemove:BackgroundCell = BackgroundCell(container.getElementAt(container.numElements - 1));
+                    container.removeElement(cellToRemove);
+                    _cellsFactory.takeBack(cellToRemove);
+                }
+            }
+            
+            /**
+             * Passes label and style information to all background cells. Size and positioning
+             * will be carried on later, during the redraw cycle.
+             */
+            private function _setupBgCells(_dataProvider:ArrayCollection):void {
+                if (!_dataProvider || !_dataProvider.length || !_bgLayer) {
+                    return;
+                }
+            
+                const padding:uint = Helpers.$getStyle(this, 'padding', DefaultStyles.DEFAULT_PADDING);
+                const fontSize:uint = Helpers.$getStyle(this, 'fontSize', DefaultStyles.DEFAULT_FONT_SIZE);
+                const chartBgColor:uint = Helpers.$getStyle(this, "chartBg", DefaultStyles.DEFAULT_CHART_BG);
+                const xAxisColor:uint = Helpers.$getStyle(this, "xAxisColor", DefaultStyles.DEFAULT_X_AXIS_COLOR);
+                const yAxisColor:uint = Helpers.$getStyle(this, "yAxisColor", DefaultStyles.DEFAULT_Y_AXIS_COLOR);
+            
+                for (var i:int = 0; i < _dataProvider.length; i++) {
+                    const cell:BackgroundCell = _bgLayer.getElementAt(i) as BackgroundCell;
+                    if (!cell) {
+                        continue;
+                    }
+                    const cellData:Object = _dataProvider[i];
+                    if (!cellData) {
+                        continue;
+                    }
+                    cell.label = cellData.label;
+                    cell.setStyle('padding', padding);
+                    cell.setStyle('textFontSize', fontSize);
+                    cell.setStyle('textColor', chartBgColor);
+            
+                    const bgColor:uint = (cellData.axis === 'x') ? xAxisColor : yAxisColor;
+                    cell.setStyle('bgColor', bgColor);
+                }
+            }
+            
+            /**
+             * Draws the background layers.
              */
             private function _drawBackground(coords:ChartCoordinates):void {
                 const g:Graphics = _bgLayer.graphics;
                 g.clear();
             
-                const availableW:Number = width;
-                const availableH:Number = height;
-            
                 const layerColor:uint = Helpers.$getStyle(this, "layerColor", DefaultStyles.DEFAULT_LAYER_COLOR);
                 const chartBg:uint = Helpers.$getStyle(this, "chartBg", DefaultStyles.DEFAULT_CHART_BG);
                 const chartBgAlpha:Number = Helpers.$getStyle(this, "chartBgAlpha", DefaultStyles.DEFAULT_CHART_BG_ALPHA);
             
-                const yAxisColor:uint = Helpers.$getStyle(this, "yAxisColor", DefaultStyles.DEFAULT_Y_AXIS_COLOR);
-                const yAxisAlpha:Number = Helpers.$getStyle(this, "yAxisAlpha", DefaultStyles.DEFAULT_Y_AXIS_ALPHA);
-            
-                const xAxisColor:uint = Helpers.$getStyle(this, "xAxisColor", DefaultStyles.DEFAULT_X_AXIS_COLOR);
-                const xAxisAlpha:Number = Helpers.$getStyle(this, "xAxisAlpha", DefaultStyles.DEFAULT_X_AXIS_ALPHA);
-            
                 // Full layer background (padded area too)
                 g.beginFill(layerColor, 1);
-                g.drawRect(0, 0, availableW, availableH);
+                g.drawRect(0, 0, width, height);
                 g.endFill();
             
                 // Chart background (inside padded area)
                 g.beginFill(chartBg, chartBgAlpha);
                 g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW, coords.bgAreaH);
                 g.endFill();
+            }
             
-                // Y-axis (left half of chart area)
-                g.beginFill(yAxisColor, yAxisAlpha);
-                g.drawRect(coords.bgAreaX, coords.bgAreaY, coords.bgAreaW / 2, coords.bgAreaH);
-                g.endFill();
+            /**
+             * Plots the rows and columns that make up the grid.
+             */
+            private function _plotGrid(coords:ChartCoordinates):void {
+                if (!_bgLayer || !_bgLayer.numElements ||
+                        !_dataProvider || !_dataProvider.length ||
+                        _bgLayer.numElements != _dataProvider.length) {
+                    return;
+                }
             
-                // X-axis (bottom half of chart area) over the Y-axis fill
-                g.beginFill(xAxisColor, xAxisAlpha);
-                g.drawRect(coords.bgAreaX, coords.bgAreaY + coords.bgAreaH / 2, coords.bgAreaW, coords.bgAreaH / 2);
-                g.endFill();
+                // Cache limits for faster access.
+                var $top:Number = coords.bgAreaY;
+                var $left:Number = coords.bgAreaX;
+                var $width:Number = coords.bgAreaW;
+                var $height:Number = coords.bgAreaH;
+            
+                // Read and cache styles (colors & alpha)
+                const xAxisColor:uint = Helpers.$getStyle(this, "xAxisColor", DefaultStyles.DEFAULT_X_AXIS_COLOR);
+                const yAxisColor:uint = Helpers.$getStyle(this, "yAxisColor", DefaultStyles.DEFAULT_Y_AXIS_COLOR);
+            
+                // Rows and columns overlap to form the grid, so their opacities
+                // are capped at 0.5. This prevents double-drawing from exceeding
+                // the intended alpha.
+                // 
+                // Example: if `yAxisAlpha` is set to 0.5, the effective value will
+                // be 0.25 (since it is halved). If both axes are set to 1, the
+                // overlapping result will still appear fully opaque (0.5 + 0.5).
+                const maxXAlpha:Number = Helpers.$getStyle(this, "xAxisAlpha", DefaultStyles.DEFAULT_X_AXIS_ALPHA) * 0.5;
+                const maxYAlpha:Number = Helpers.$getStyle(this, "yAxisAlpha", DefaultStyles.DEFAULT_Y_AXIS_ALPHA) * 0.5;
+            
+                // Draw cells from first to last, to match the order labels were set it.
+                const numCells:uint = _bgLayer.numElements;
+                for (var i:int = 0; i < numCells; i++) {
+                    const cell:BackgroundCell = _bgLayer.getElementAt(i) as BackgroundCell;
+            
+                    // Get current and next cell data (needed to compute widths/heights, etc).
+                    const cellData:Object = _dataProvider[i];
+                    if (!cell || !cellData) {
+                        continue;
+                    }
+                    const nextCellData:Object = (i < numCells - 1) ? _dataProvider[i + 1] : null;
+            
+                    // Get current and next cell axis.
+                    const cellAxis:String = cellData.axis;
+                    if (!cellAxis || (cellAxis !== 'x' && cellAxis !== 'y')) {
+                        continue;
+                    }
+                    const isRow:Boolean = cellAxis === 'x';
+                    const isColumn:Boolean = cellAxis === 'y';
+                    const nextCellAxis:String = nextCellData ? nextCellData.axis : null;
+            
+                    // Get current and next stop values. We reverse rows, to draw them from the bottom.
+                    const stopValue:Number = Math.max(0, Math.min(1, cellData.stop));
+                    if (isNaN(stopValue)) {
+                        continue;
+                    }
+                    const cellStop:Number = isColumn ? stopValue : 1 - stopValue;
+                    const nextStopValue:Number = (nextCellData && nextCellAxis === cellAxis) ?
+                        Math.max(0, Math.min(1, nextCellData.stop)) || 1 : 1;
+            
+                    const nextCellStop:Number = isColumn ? nextStopValue : 1 - nextStopValue;
+            
+                    // Set cell alpha. Use non-inverted stop value for rows, as we want the lower
+                    // stops to have the lower alphas.
+                    const cellAlpha:Number = isRow ? stopValue * maxXAlpha : cellStop * maxYAlpha;
+                    cell.setStyle('bgAlpha', cellAlpha);
+            
+                    // Size and position the cell.
+                    var cellX:Number;
+                    var nextCellX:Number;
+                    var cellY:Number;
+                    var nextCellY:Number;
+                    var cellW:Number;
+                    var cellH:Number;
+
+                    if (isRow) {
+                        cellX = $left;
+                        cellW = $width;
+            
+                        cellY = $top + cellStop * $height;
+                        nextCellY = $top + nextCellStop * $height;
+                        cellH = Math.abs(cellY - nextCellY);
+            
+                        // Rows are drawn from bottom to top, and thus are anchored to their bottom.
+                        cellY -= cellH;
+                    }
+            
+                    if (isColumn) {
+                        cellY = $top;
+                        cellH = $height;
+            
+                        cellX = $left + cellStop * $width;
+                        nextCellX = $left + nextCellStop * $width;
+                        cellW = Math.abs(cellX - nextCellX);
+                    }
+            
+                    // Actually plot the cell.
+                    if (!isNaN(cellW) && !isNaN(cellH) &&
+                            !isNaN(cellX) && !isNaN(cellY)) {
+                        cell.width = cellW;
+                        cell.height = cellH;
+                        cell.x = cellX;
+                        cell.y = cellY;
+                    }
+                }
+            
             }
         ]]>
     </fx:Script>

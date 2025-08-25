@@ -27,6 +27,7 @@
             import mx.styles.CSSStyleDeclaration;
             import mx.styles.IStyleManager2;
             import com.github.ciacob.flexnodal.Nodal;
+            import mx.collections.ArrayCollection;
             
             // Helper style manager for reading styles before they actually get
             // applied to our component.
@@ -48,7 +49,7 @@
                     _purgeDrawable);
             
             /**
-             * Storage for the providers of "charts", LineChartLayer instances used
+             * Storage for the provider of "charts", LineChartLayer instances used
              * to display and edit line charts.
              */
             private const _chartsFactory:InstanceFactory = new InstanceFactory(
@@ -61,15 +62,17 @@
             // The `dataProvider` property
             // ---------------------------
             
-            // Storage for the `_dataProvider` property.
+            // Storage for the `dataProvider` property.
             private var _dataProvider:ArrayCollection;
             
-            // Flag to raise when the `_dataProvider` property has been
+            // Flag to raise when the `dataProvider` property has been
             // externally changed.
             private var _dataProviderChanged:Boolean;
             
             /**
              * Returns the current data provider of this component.
+             * The data provider defines the chart lines to display and
+             * edit.
              */
             public function get dataProvider():ArrayCollection {
                 return _dataProvider;
@@ -83,6 +86,42 @@
                 if (value !== _dataProvider) {
                     _dataProvider = value;
                     _dataProviderChanged = true;
+                    invalidateProperties();
+                }
+            }
+            
+            // -------------------------------
+            // The `gridDataProvider` property
+            // -------------------------------
+            
+            // Storage for the `gridDataProvider` property.
+            private var _gridDataProvider:ArrayCollection;
+            
+            // Flag to raise when the `gridDataProvider` property has been
+            // externally changed.
+            private var _gridDataProviderChanged:Boolean;
+            
+            /**
+             * The data provider currently assigned to this component’s grid.
+             *
+             * This collection supplies the grid segmentation drawn beneath
+             * the line charts, giving visual context for interpreting chart
+             * values.
+             */
+            public function get gridDataProvider():ArrayCollection {
+                return _gridDataProvider;
+            }
+            
+            /**
+             * Assigns a new data provider for the grid.
+             *
+             * Setting this property marks the component’s grid data as
+             * changed and schedules a commit via `invalidateProperties()`.
+             */
+            public function set gridDataProvider(value:ArrayCollection):void {
+                if (value !== _gridDataProvider) {
+                    _gridDataProvider = value;
+                    _gridDataProviderChanged = true;
                     invalidateProperties();
                 }
             }
@@ -174,23 +213,23 @@
                 _setChartsAvailability(_operatingMode);
                 invalidateDisplayList();
             }
-
+            
             /**
              * Unselects all selected nodes of the active chart, if applicable.
              * Dispatches a `NodalEvent.SELECTION_CHANGE` event.
              */
-            public function clearSelection () : void {
+            public function clearSelection():void {
                 if (!_activeChart) {
                     return;
                 }
                 _activeChart.clearSelection();
             }
-
+            
             /**
              * Deletes all selected nodes of the active chart, if applicable.
              * Dispatches a `Nodal.CHART_DATA_CHANGE` event.
              */
-            public function deleteSelection () : void {
+            public function deleteSelection():void {
                 if (!_activeChart) {
                     return;
                 }
@@ -217,6 +256,13 @@
                         chartLayers.getElementAt(chartLayers.numElements - 1) as LineChartLayer : null;
                     _setActiveChart(topChart);
                     dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
+                    invalidateDisplayList();
+                }
+
+                // Grid data provider
+                if (_gridDataProviderChanged) {
+                    _gridDataProviderChanged = false;
+                    backgroundLayer.dataProvider = _gridDataProvider;
                     invalidateDisplayList();
                 }
             
@@ -278,11 +324,11 @@
              * Ensures the `chartLayers` container contains the correct number of
              * charts.
              */
-            private function _provisionChartLayers(_dataProvider:ArrayCollection, container:Group):void {
-                if (!_chartsFactory || !_dataProvider) {
+            private function _provisionChartLayers(dataProvider:ArrayCollection, container:Group):void {
+                if (!_chartsFactory || !dataProvider || !container) {
                     return;
                 }
-                const numCharts:uint = _dataProvider.length;
+                const numCharts:uint = dataProvider.length;
             
                 // Append
                 while (container.numElements < numCharts) {

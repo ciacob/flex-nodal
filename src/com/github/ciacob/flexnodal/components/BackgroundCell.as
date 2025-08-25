@@ -135,7 +135,7 @@ package com.github.ciacob.flexnodal.components {
             const g:Graphics = graphics;
             g.clear();
             g.beginFill(bgColor, bgAlpha);
-            g.drawRect(0, 0, uW, uH);
+            g.drawRect(1, 1, uW - 2, uH - 2);
 
             // Position and style the label, if any
             if (_labelComponent) {
