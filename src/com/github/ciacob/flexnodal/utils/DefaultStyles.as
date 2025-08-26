@@ -31,5 +31,7 @@ package com.github.ciacob.flexnodal.utils {
 
         public static const DEFAULT_CHART_ALPHA: Number = 0.4;
 
+        public static const DEFAULT_VERTICAL_GAP : Number = 5;
+
     }
 }
