@@ -235,6 +235,17 @@
                 }
                 _activeChart.deleteSelection(false);
             }
+
+            /**
+             * Rewrites the values of all selected nodes of the active chart, if
+             * applicable.
+             */
+            public function patchSelection (patch : Object) : void {
+                if (!_activeChart || !patch) {
+                    return;
+                }
+                _activeChart.patchSelection (patch);
+            }
             
             /**
              * Overridden to update layers as needed.
@@ -610,6 +621,7 @@
             <components:BackgroundChartLayer
                 id="backgroundLayer"
                 width="100%" height="100%"
+                click="{clearSelection()}"
                 />
 
             <!-- Container for all chart layers -->

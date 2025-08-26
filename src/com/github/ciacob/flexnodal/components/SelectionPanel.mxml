@@ -1,0 +1,458 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TileGroup
+    xmlns:fx="http://ns.adobe.com/mxml/2009"
+    xmlns:s="library://ns.adobe.com/flex/spark"
+    xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:spark="mx.skins.spark.*"
+    requestedColumnCount="2"
+    columnAlign="justifyUsingWidth"
+    rowAlign="justifyUsingHeight"
+
+    padding="{getStyle ('padding') || 0}"
+    horizontalGap="{getStyle('horizontalGap') || 0}"
+    verticalGap="{getStyle('verticalGap') || 0}"
+    rowHeight="{getStyle('rowHeight') || 0}"
+    minHeight="{getStyle('minHeight') || 0}"
+    
+    verticalAlign="middle">
+
+    <fx:Metadata>
+        [Event(name="selectionPatch", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        
+        [Style(name="headerStyle", type="String", inherit="false")]
+        [Style(name="bodyStyle", type="String", inherit="false")]
+        [Style(name="buttonStyle", type="String", inherit="false")]
+    </fx:Metadata>
+
+    <fx:Script>
+        <![CDATA[
+            import spark.components.NumericStepper;
+            import com.github.ciacob.flexnodal.events.NodalEvent;
+            
+            // The name of the current chart; displayed at the top of the panel.
+            [Bindable]
+            public var chartName:String;
+            
+            /**
+             * Overridable function that translates a time percent (e.g., `0.5`) to a label.
+             * Default function just puts `time` in standard percent format (e.g. `50%`).
+             */
+            public var timeToLabel:Function = function(time:Number):String {
+                return _toPercent(time) + ' %';
+            };
+            
+            // The number of rows the component's UI uses.
+            private static const NUM_ROWS:uint = 3;
+            
+            // Storage for the current number of selected nodes.
+            [Bindable]
+            private var _numNodes:uint;
+            
+            // Storage for the value of the currently selected node (single selection scenario).
+            [Bindable]
+            private var _currValue:Number;
+            
+            // Storage for the time of the currently selected node (single selection scenario).
+            [Bindable]
+            private var _currNodeTime:String;
+            
+            // Storage for the smallest of all selected values (multiple selection scenario).
+            [Bindable]
+            private var _minRangeValue:Number;
+            
+            // Storage for the largest of all selected values (multiple selection scenario).
+            [Bindable]
+            private var _maxRangeValue:Number;
+            
+            // Storage for the average of all selected values (multiple selection scenario).
+            [Bindable]
+            private var _avgRangeValue:Number;
+            
+            // Storage for the value of the current anchor node (both scenarios).
+            [Bindable]
+            private var _anchorValue:Number;
+            
+            // ---------------------------
+            // The `dataProvider` property
+            // ---------------------------
+            
+            // Internal storage for the `dataProvider` property
+            private var _dataProvider:Object;
+            
+            // Flag we raise when the `dataProvider` property has been externally changed
+            private var _dataProviderChanged:Boolean;
+            
+            /**
+             * Returns the current data provider of this component. Reflects internal
+             * changes.
+             */
+            public function get dataProvider():Object {
+                return _dataProvider;
+            }
+            
+            /**
+             * Sets or replaces a data provider for this component.
+             * @param   value
+             *          A user provided dataset to be used as data provider.
+             *          Must pass validation in order to be accepted. Example of
+             *          valid datasets:
+             *
+             *          Single selection:
+             *          {
+             *              "selectedNode":[0.5,0.8],
+             *              "anchorNode":[0.5,0.8],
+             *              "selectedNodes":[[0.5,0.8]]
+             *          }
+             *
+             *          Multiple selection:
+             *          {
+             *              "selectedNode":[1,0],
+             *              "anchorNode":[1,0],
+             *              "selectedNodes":[[0.5,0.8],[0.95,0],[1,0]]
+             *          }
+             *
+             *          If a provided dataset does not pass validation, `null` is
+             *          assumed instead.
+             *
+             *          N.B.: The component operates destructively on the provided
+             *          dataset rather than on a detached copy. This is by design.
+             */
+            public function set dataProvider(value:Object):void {
+                if (value !== _dataProvider) {
+                    _dataProvider = _validateDataProvider(value) ? value : null;
+                    _dataProviderChanged = true;
+                    invalidateProperties();
+                }
+            }
+            
+            /**
+             * Overridden to handle setting/replacing the data provider.
+             */
+            override protected function commitProperties():void {
+                super.commitProperties();
+            
+                // Data provider
+                if (_dataProviderChanged) {
+                    _dataProviderChanged = false;
+                    _reset();
+                    if (_dataProvider) {
+                        _numNodes = _dataProvider.selectedNodes.length;
+                        if (_numNodes) {
+            
+                            // Single selection scenario
+                            if (_numNodes === 1) {
+                                const selectedNode:Array = _dataProvider.selectedNode;
+                                _currValue = _toPercent(selectedNode[1]);
+                                _currNodeTime = (timeToLabel !== null) ?
+                                    timeToLabel(selectedNode[0]) : "";
+                            }
+            
+                            // Multiple selection scenario
+                            else {
+                                const stats:Object = _analyzeY(_dataProvider.selectedNodes);
+                                _minRangeValue = _toPercent(stats.min);
+                                _maxRangeValue = _toPercent(stats.max);
+                                _avgRangeValue = _toPercent(stats.avg);
+                                _anchorValue = _toPercent(_dataProvider.anchorNode[1]);
+                            }
+                        }
+                    }
+            
+                }
+            }
+            
+            /**
+             * Resets all display values to their defaults.
+             */
+            private function _reset():void {
+                _numNodes = 0;
+                _currValue = NaN;
+                _currNodeTime = null;
+                _minRangeValue = NaN;
+                _maxRangeValue = NaN;
+                _avgRangeValue = NaN;
+                _anchorValue = NaN;
+            }
+            
+            /**
+             * Converts, e.g., `0.5` to `50`.
+             */
+            private function _toPercent(val:Number):uint {
+            
+                return Math.round(val * 100);
+            }
+            
+            /**
+             * Converts, e.g., `50` to `0.5`.
+             */
+            private function _fromPercent(val:uint):Number {
+                return val / 100;
+            }
+            
+            /**
+             * Analyzes given `nodes` and returns an Object with their
+             * minimum, maximum and average values.
+             *
+             * @param   `nodes`
+             *           Assumed valid, non-empty Array of valid doublets.
+             *
+             * @return  An Object similar to:
+             *          {min: 0, max: 0.5, avg: 1}
+             */
+            private function _analyzeY(nodes:Array):Object {
+            
+                var sum:Number = 0;
+                var min:Number = Number.MAX_VALUE;
+                var max:Number = -Number.MAX_VALUE;
+            
+                for each (var node:Array in nodes) {
+                    var y:Number = node[1];
+                    if (y < min) {
+                        min = y;
+                    }
+                    if (y > max) {
+                        max = y;
+                    }
+                    sum += y;
+                }
+            
+                var avg:Number = sum / nodes.length;
+                return {min: min, max: max, avg: avg};
+            }
+            
+            /**
+             * Formally validates the received `dataProvider`. Expected format is, e.g.:
+             * {
+             *      "selectedNode":[1,0],
+             *      "anchorNode":[1,0],
+             *      "selectedNodes":[[0,0.1],[0.5,0.8],[0.95,0],[1,0]]
+             * }
+             */
+            private function _validateDataProvider(dataProvider:Object):Boolean {
+                if (!dataProvider) {
+                    return false;
+                }
+                const expectedProps:Array = ['selectedNode', 'anchorNode', 'selectedNodes'];
+                for each (var propName:String in expectedProps) {
+                    if (!dataProvider.hasOwnProperty(propName)) {
+                        return false;
+                    }
+                    if (!(dataProvider[propName] is Array)) {
+                        return false;
+                    }
+                    if ((dataProvider[propName] as Array).length === 0) {
+                        return false;
+                    }
+            
+                    const validatorFn:Function = (propName === 'selectedNodes') ?
+                        _validateDoublets : _validateDoublet;
+                    if (!validatorFn(dataProvider[propName] as Array)) {
+                        return false;
+                    }
+                }
+            
+                return true;
+            }
+            
+            /**
+             * Validates the given `doublets` Array as an Array of legitimate doublets.
+             *
+             * @param   doublets
+             *          Assumed non-null Array to validate.
+             */
+            private function _validateDoublets(doublets:Array):Boolean {
+                for (var i:int = 0; i < doublets.length; i++) {
+                    if (!_validateDoublet(doublets[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            
+            /**
+             * Validates the given `doublet` as an Array of exactly two valid
+             * numeric values.
+             *
+             * @param   doublet
+             *          Assumed non-null Array to validate.
+             */
+            private function _validateDoublet(doublet:Array):Boolean {
+                return (doublet.length === 2 &&
+                        !isNaN(doublet[0]) && !isNaN(doublet[1]));
+            }
+            
+            /**
+             * Sets given `value` in all doublets found inside the given `dp`.
+             * @param   dp
+             *          Either `null` or a previously validated data provider.
+             *
+             * @param   value
+             *          Either `NaN` or a previously validated Number.
+             */
+            private function _patchDataProvider(dp:Object, value:Number):void {
+                if (!dp || isNaN(value)) {
+                    return;
+                }
+            
+                for (var propName:String in dp) {
+                    const dataset:Array = dp[propName] as Array;
+                    const patcherFn:Function = (propName === 'selectedNodes') ?
+                        _patchDoublets : _patchDoublet;
+                    patcherFn(dataset, value);
+                }
+            }
+            
+            /**
+             * Patches the given `doublets` Array by replacing the second item of
+             * each `doublet` with given `value`.
+             *
+             * @param   doublet
+             *          Assumed non-null and validated doublets Array to patch.
+             *
+             * @param   value
+             *          Assumed valid Number to use.
+             */
+            private function _patchDoublets(doublets:Array, value:Number):void {
+                for (var i:int = 0; i < doublets.length; i++) {
+                    _patchDoublet(doublets[i], value);
+                }
+            }
+            
+            /**
+             * Patches the given `doublet` by replacing its second item with
+             * given `value`.
+             *
+             * @param   doublet
+             *          Assumed non-null and validated doublet Array to patch.
+             *
+             * @param   value
+             *          Assumed valid Number to use.
+             */
+            private function _patchDoublet(doublet:Array, value:Number):void {
+                doublet[1] = value;
+            }
+            
+            /**
+             * Sets all selected nodes to given `value`.
+             */
+            private function _setAllTo(percent:Number):void {
+                if (isNaN(percent)) {
+                    return;
+                }
+            
+                if (!_dataProvider) {
+                    return;
+                }
+            
+                const value:Number = _fromPercent(percent);
+                _patchDataProvider(_dataProvider, value);
+                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_PATCH, _dataProvider));
+            }
+            
+            /**
+             * Listener. Executes when a single selected node's value has been changed
+             * through the Numeric Stepper component.
+             */
+            private function _onNodeValueChanged(event:Event):void {
+                if (!_dataProvider || !event || !event.target) {
+                    return;
+                }
+            
+                const ns:NumericStepper = (event.target as NumericStepper);
+                if (!ns) {
+                    return;
+                }
+            
+                const value:Number = _fromPercent(ns.value);
+                if (isNaN(value)) {
+                    return;
+                }
+            
+                _patchDataProvider(_dataProvider, value);
+                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_PATCH, _dataProvider));
+            }
+            
+            override protected function updateDisplayList(w:Number, h:Number):void {
+                super.updateDisplayList(w, h);
+                trace (w, h);
+            }
+        ]]>
+    </fx:Script>
+
+    <!-- Chart name and number of selected nodes -->
+    <s:Label text="Selection:"
+        styleName="{getStyle('headerStyle')}"
+        width="100%" textAlign="right"/>
+
+    <!-- Shown when there is something selected -->
+    <s:Label text="{chartName} ({_numNodes} {(_numNodes === 1)? 'node' : 'nodes'})"
+        styleName="{getStyle('bodyStyle')}"
+        visible="{!!_numNodes}" includeInLayout="{!!_numNodes}"/>
+
+    <!-- Shown when there is no selection -->
+    <s:Label text="none"
+        styleName="{getStyle('bodyStyle')}"
+        visible="{!_numNodes}" includeInLayout="{!_numNodes}"/>
+
+    <!-- Time (only shown for single selection) -->
+    <s:Label text="Time:"
+        styleName="{getStyle('headerStyle')}"
+        width="100%" textAlign="right"
+        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}"/>
+
+    <s:Label text="{_currNodeTime}"
+        styleName="{getStyle('bodyStyle')}"
+        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}"/>
+
+    <!-- Value (only shown for single selection) -->
+    <s:Label text="Value:"
+        styleName="{getStyle('headerStyle')}"
+        width="100%" textAlign="right"
+        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}"/>
+
+    <s:HGroup padding="0" gap="5" verticalAlign="middle"
+        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}">
+
+        <s:NumericStepper value="{_currValue}"
+            minimum="0" maximum="100" stepSize="1"
+            change="{_onNodeValueChanged (event)}"/>
+
+        <s:Label text="%" styleName="{getStyle('bodyStyle')}"/>
+    </s:HGroup>
+
+    <!-- Range (only shown for multiple selection) -->
+    <s:Label text="Range:" styleName="{getStyle('headerStyle')}"
+        width="100%" textAlign="right"
+        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}"/>
+
+    <s:HGroup padding="0" gap="5" verticalAlign="middle"
+        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}">
+
+        <s:Button label="{_minRangeValue} %"
+            click="_setAllTo (_minRangeValue)"/>
+
+        <s:Label text="→" styleName="{getStyle('bodyStyle')}"/>
+
+        <s:Button label="{_maxRangeValue} %"
+            click="_setAllTo (_maxRangeValue)"/>
+
+        <s:Label text="(average:" styleName="{getStyle('bodyStyle')}"/>
+
+        <s:Button label="{_avgRangeValue} %"
+            click="_setAllTo (_avgRangeValue)"/>
+
+        <s:Label text=")" styleName="{getStyle('bodyStyle')}"/>
+    </s:HGroup>
+
+    <!-- "Anchor" (only shown for multiple selection) -->
+    <s:Label text="Anchor:" styleName="{getStyle('headerStyle')}"
+        width="100%" textAlign="right"
+        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}"/>
+
+    <s:HGroup padding="0" gap="5" verticalAlign="middle"
+        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}">
+
+        <s:Button label="{_anchorValue} %"
+            click="_setAllTo (_anchorValue)"/>
+    </s:HGroup>
+
+</s:TileGroup>

@@ -72,7 +72,7 @@
             
             // Flag we raise during marker dragging.
             private var _nowDragging:Boolean;
-
+            
             // Flag we raise when at least one "mouseMove" Event is registered
             // during an initiated node dragging operation.
             private var _haveActualDrag:Boolean;
@@ -248,7 +248,10 @@
                     return;
                 }
             
+                // N.B.: `clearSelection` empties out `selectionManager.selectedNodes`:
+                // therefore, we need to loop over a clone instead.
                 const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes.concat();
+
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
                 }
@@ -280,8 +283,43 @@
                     invalidateDisplayList();
                     _dataProvider.values = _exportNodes(_nodes);
                     if (dispatch) {
-                        dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+                        _broadcastNodesChange();
                     }
+                }
+            }
+            
+            /**
+             * Rewrites the values of all selected nodes, also dispatching a
+             * `NODES_CHANGE` and a `SELECTION_CHANGE` NodalEvents (opt-out).
+             */
+            public function patchSelection(patch:Object, dispatch:Boolean = true):void {
+                if (!patch || !patch.selectedNodes || !patch.selectedNodes.length ||
+                        !_selectionManager || !_nodes || !_nodes.length) {
+                    return;
+                }
+            
+                const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes;
+                if (!selectedNodes || !selectedNodes.length) {
+                    return;
+                }
+
+                if (selectedNodes.length != selectedNodes.length) {
+                    return;
+                }
+            
+                _dragBoundsChanged = true;
+                const patchedNodes:Array = patch.selectedNodes;
+                for (var i:int = 0; i < patchedNodes.length; i++) {
+                    const p:Array = patchedNodes[i];
+                    const pValue:Number = p[1];
+                    selectedNodes[i].logicalY = pValue;
+                }
+            
+                invalidateDisplayList();
+                _dataProvider.values = _exportNodes(_nodes);
+                if (dispatch) {
+                    _broadcastNodesChange();
+                    _broadcastSelection();
                 }
             }
             
@@ -487,7 +525,7 @@
                 // Broadcast the changes.
                 _dataProvider.values = _exportNodes(_nodes);
                 if (dispatch) {
-                    dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+                    _broadcastNodesChange();
                 }
             
                 return node;
@@ -783,7 +821,7 @@
                 if (!numSelNodes) {
                     return;
                 }
-
+            
                 // Raise a flag to mark current drag session as fertile.
                 _haveActualDrag = true;
             
@@ -829,7 +867,7 @@
             
                 // Clear the "screen points" snapshot.
                 _oldScreenPoints = null;
-
+            
                 // Early exit if this dragging session was sterile (no actual dragging).
                 if (!_haveActualDrag) {
                     _haveActualDrag = false;
@@ -850,7 +888,11 @@
                 }
             
                 _dataProvider.values = _exportNodes(_nodes);
-                dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+                _broadcastNodesChange();
+            
+                // Rebroadcast selection, as selected values might have changed despite
+                // indices staying the same.
+                _broadcastSelection();
             
                 // Recompute the dragging bounds based on the (likely changed) node values.
                 _dragBoundsChanged = true;
@@ -868,6 +910,13 @@
                                 selectedNode: _exportNode(_selectionManager.selectedNode),
                                 anchorNode: _exportNode(_selectionManager.anchorNode)
                             }));
+            }
+            
+            /**
+             * Sends out information about the changed nodes.
+             */
+            private function _broadcastNodesChange():void {
+                dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
             }
             
             /**
