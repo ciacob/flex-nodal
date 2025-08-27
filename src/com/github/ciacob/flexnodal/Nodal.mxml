@@ -501,9 +501,8 @@
                 }
             
                 if (_activeChart) {
-                    _unwireChart(_activeChart);
                     _activeChart.clearSelection();
-            
+                    _unwireChart(_activeChart);
                     _activeChart.alpha = _defaultAlpha;
                     _activeChart = null;
                 }
