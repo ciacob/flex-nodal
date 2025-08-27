@@ -161,6 +161,18 @@
             }
             
             /**
+             * Rebuilds this component’s internal representation
+             * of the current selection context. This can help
+             * address edge cases, such as undetected manual
+             * overlapping selection edits.
+             */
+            public function reset():void {
+                _selectionHash = null;
+                _dataProviderChanged = true;
+                invalidateProperties();
+            }
+            
+            /**
              * Overridden to handle setting/replacing the data provider.
              */
             override protected function commitProperties():void {
@@ -169,7 +181,7 @@
                 // Data provider
                 if (_dataProviderChanged) {
                     _dataProviderChanged = false;
-                    _reset();
+                    _clearCache();
                     if (_dataProvider) {
                         _numNodes = _dataProvider.selectedNodes.length;
                         if (_numNodes) {
@@ -188,12 +200,12 @@
                                 _avgRangeValue = _toPercent(stats.avg);
             
                                 const hash:String = _hashSelectionContext(chartName, _dataProvider.selectedNodes);
-                                trace(':::HASH:::', hash);
                                 if (hash !== _selectionHash) {
                                     _selectionHash = hash;
                                     _offsetMin = _toPercent(-stats.min);
                                     _offsetMax = _toPercent(1 - stats.max);
                                     _currOffset = 0;
+                                    offsetNs.value = 0;
                                 }
                             }
                         }
@@ -216,9 +228,9 @@
             }
             
             /**
-             * Resets all display values to their defaults.
+             * Resets computed values to their defaults.
              */
-            private function _reset():void {
+            private function _clearCache():void {
                 _numNodes = 0;
                 _currValue = 0;
                 _currNodeTime = null;
@@ -368,6 +380,9 @@
                         _patchDoublets : _patchDoublet;
                     patcherFn(dataset, value, offsetMode);
                 }
+            
+                _dataProviderChanged = true;
+                invalidateProperties();
             }
             
             /**

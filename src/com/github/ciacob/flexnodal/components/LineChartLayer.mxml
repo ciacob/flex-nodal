@@ -289,10 +289,10 @@
             }
             
             /**
-             * Rewrites the values of all selected nodes, also dispatching a
-             * `NODES_CHANGE` and a `SELECTION_CHANGE` NodalEvents (opt-out).
+             * Rewrites the values of all selected nodes, optionally also dispatching
+             * a `NODES_CHANGE` and a `SELECTION_CHANGE` NodalEvents.
              */
-            public function patchSelection(patch:Object, dispatch:Boolean = true):void {
+            public function patchSelection(patch:Object, dispatch:Boolean = false):void {
                 if (!patch || !patch.selectedNodes || !patch.selectedNodes.length ||
                         !_selectionManager || !_nodes || !_nodes.length) {
                     return;

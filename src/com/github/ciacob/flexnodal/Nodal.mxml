@@ -240,11 +240,11 @@
              * Rewrites the values of all selected nodes of the active chart, if
              * applicable.
              */
-            public function patchSelection (patch : Object) : void {
+            public function patchSelection (patch : Object, dispatch:Boolean = false) : void {
                 if (!_activeChart || !patch) {
                     return;
                 }
-                _activeChart.patchSelection (patch);
+                _activeChart.patchSelection (patch, dispatch);
             }
             
             /**
