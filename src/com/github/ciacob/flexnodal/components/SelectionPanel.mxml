@@ -4,15 +4,15 @@
     xmlns:s="library://ns.adobe.com/flex/spark"
     xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:spark="mx.skins.spark.*"
     requestedColumnCount="2"
-    columnAlign="justifyUsingWidth"
-    rowAlign="justifyUsingHeight"
+    columnAlign="justifyUsingGap"
+    rowAlign="justifyUsingGap"
 
     padding="{getStyle ('padding') || 0}"
     horizontalGap="{getStyle('horizontalGap') || 0}"
     verticalGap="{getStyle('verticalGap') || 0}"
     rowHeight="{getStyle('rowHeight') || 0}"
     minHeight="{getStyle('minHeight') || 0}"
-    
+
     verticalAlign="middle">
 
     <fx:Metadata>
@@ -37,29 +37,61 @@
              * Default function just puts `time` in standard percent format (e.g. `50%`).
              */
             public var timeToLabel:Function = function(time:Number):String {
-                return _toPercent(time) + ' %';
+                return _toPercent(time) + '%';
             };
             
-            // The number of rows the component's UI uses.
-            private static const NUM_ROWS:uint = 3;
+            // UI visibility flag to raise when there is any selection
+            [Bindable]
+            private var _haveSelection:Boolean;
+            
+            // UI visibility flag to raise when we are in single selection scenario.
+            [Bindable]
+            private var _haveSingleSelection:Boolean;
+            
+            // UI visibility flag to raise when we are in multiple selection scenario.
+            [Bindable]
+            private var _haveMultipleSelection:Boolean;
+            
+            // UI visibility flag to raise when we have a non-empty range (i.e., minimum
+            // is not the same as maximum).
+            [Bindable]
+            private var _haveRange:Boolean;
+            
+            // UI visibility flag to raise when we have an empty range (i.e., minimum is the
+            // same as maximum);
+            [Bindable]
+            private var _haveEmptyRange:Boolean;
+            
+            // UI visibility flag to raise when we have either a single selection, or a
+            // no-range multiple selection (all selected nodes have the same value).
+            [Bindable]
+            private var _haveCommonValue:Boolean;
             
             // Storage for the current number of selected nodes.
             [Bindable]
-            private var _numNodes:uint;
+            private var _numNodes:int;
             
             // Storage for the value of the currently selected node (single selection scenario).
             [Bindable]
-            private var _currValue:Number;
+            private var _currValue:int;
+            
+            // Storage for the `minimum` property to pass to the "Offset" Numeric Stepper component.
+            [Bindable]
+            private var _offsetMin:int;
+            
+            // Storage for the `maximum` property to pass to the "Offset" Numeric Stepper component.
+            [Bindable]
+            private var _offsetMax:int;
             
             // Storage for the time of the currently selected node (single selection scenario).
             [Bindable]
             private var _currNodeTime:String;
             
-            // Storage for the smallest of all selected values (multiple selection scenario).
+            // Storage for the minimum of all selected values (multiple selection scenario).
             [Bindable]
             private var _minRangeValue:Number;
             
-            // Storage for the largest of all selected values (multiple selection scenario).
+            // Storage for the maximum of all selected values (multiple selection scenario).
             [Bindable]
             private var _maxRangeValue:Number;
             
@@ -67,9 +99,13 @@
             [Bindable]
             private var _avgRangeValue:Number;
             
-            // Storage for the value of the current anchor node (both scenarios).
-            [Bindable]
-            private var _anchorValue:Number;
+            // Storage for the last known offset applied to selected nodes (multiple
+            // selection scenario).
+            private var _currOffset:Number = 0;
+            
+            // Storage for the last known selection hash. Used to determine if selection
+            // has been changed outside the SelectionPanel component.
+            private var _selectionHash:String;
             
             // ---------------------------
             // The `dataProvider` property
@@ -138,26 +174,45 @@
                         _numNodes = _dataProvider.selectedNodes.length;
                         if (_numNodes) {
             
-                            // Single selection scenario
-                            if (_numNodes === 1) {
-                                const selectedNode:Array = _dataProvider.selectedNode;
-                                _currValue = _toPercent(selectedNode[1]);
-                                _currNodeTime = (timeToLabel !== null) ?
-                                    timeToLabel(selectedNode[0]) : "";
-                            }
+                            // Common to single and multiple selection scenarios
+                            const selectedNode:Array = _dataProvider.selectedNode;
+                            _currValue = _toPercent(selectedNode[1]);
+                            _currNodeTime = (timeToLabel !== null) ?
+                                timeToLabel(selectedNode[0]) : "";
             
                             // Multiple selection scenario
-                            else {
+                            if (_numNodes > 1) {
                                 const stats:Object = _analyzeY(_dataProvider.selectedNodes);
                                 _minRangeValue = _toPercent(stats.min);
                                 _maxRangeValue = _toPercent(stats.max);
                                 _avgRangeValue = _toPercent(stats.avg);
-                                _anchorValue = _toPercent(_dataProvider.anchorNode[1]);
+            
+                                const hash:String = _hashSelectionContext(chartName, _dataProvider.selectedNodes);
+                                trace(':::HASH:::', hash);
+                                if (hash !== _selectionHash) {
+                                    _selectionHash = hash;
+                                    _offsetMin = _toPercent(-stats.min);
+                                    _offsetMax = _toPercent(1 - stats.max);
+                                    _currOffset = 0;
+                                }
                             }
                         }
                     }
-            
+                    _updateUi();
                 }
+            }
+            
+            /**
+             * Creates a unique, deterministic representation of the current selection,
+             * based on given `chartName` and `selectedNodes`. Relies on the fact that
+             * selected nodes maintain their indices and "y" values when patched.
+             */
+            private function _hashSelectionContext(chartName:String, selectedNodes:Array):String {
+                const tokens:Array = [chartName || ""];
+                for (var i:int = 0; i < selectedNodes.length; i++) {
+                    tokens.push(i + '-' + selectedNodes[i][0]);
+                }
+                return tokens.join(',');
             }
             
             /**
@@ -165,26 +220,38 @@
              */
             private function _reset():void {
                 _numNodes = 0;
-                _currValue = NaN;
+                _currValue = 0;
                 _currNodeTime = null;
                 _minRangeValue = NaN;
                 _maxRangeValue = NaN;
                 _avgRangeValue = NaN;
-                _anchorValue = NaN;
+            }
+            
+            /**
+             * Sets all UI visibility flags based on current selection.
+             */
+            private function _updateUi():void {
+                _haveSingleSelection = _numNodes === 1;
+                _haveMultipleSelection = _numNodes > 1;
+                _haveSelection = _haveSingleSelection || _haveMultipleSelection;
+                _haveRange = _haveMultipleSelection &&
+                    !isNaN(_minRangeValue) && !isNaN(_maxRangeValue) &&
+                    _minRangeValue !== _maxRangeValue;
+                _haveEmptyRange = (_haveMultipleSelection && !_haveRange);
+                _haveCommonValue = _haveSingleSelection || _haveEmptyRange;
             }
             
             /**
              * Converts, e.g., `0.5` to `50`.
              */
-            private function _toPercent(val:Number):uint {
-            
+            private function _toPercent(val:Number):int {
                 return Math.round(val * 100);
             }
             
             /**
              * Converts, e.g., `50` to `0.5`.
              */
-            private function _fromPercent(val:uint):Number {
+            private function _fromPercent(val:int):Number {
                 return val / 100;
             }
             
@@ -199,7 +266,6 @@
              *          {min: 0, max: 0.5, avg: 1}
              */
             private function _analyzeY(nodes:Array):Object {
-            
                 var sum:Number = 0;
                 var min:Number = Number.MAX_VALUE;
                 var max:Number = -Number.MAX_VALUE;
@@ -287,8 +353,11 @@
              *
              * @param   value
              *          Either `NaN` or a previously validated Number.
+             *
+             * @param   value
+             *          Whether given `value` should be treated as absolute or an offset.
              */
-            private function _patchDataProvider(dp:Object, value:Number):void {
+            private function _patchDataProvider(dp:Object, value:Number, offsetMode:Boolean = false):void {
                 if (!dp || isNaN(value)) {
                     return;
                 }
@@ -297,7 +366,7 @@
                     const dataset:Array = dp[propName] as Array;
                     const patcherFn:Function = (propName === 'selectedNodes') ?
                         _patchDoublets : _patchDoublet;
-                    patcherFn(dataset, value);
+                    patcherFn(dataset, value, offsetMode);
                 }
             }
             
@@ -310,10 +379,13 @@
              *
              * @param   value
              *          Assumed valid Number to use.
+             *
+             * @param   offsetMode
+             *          optional. If `true`, treats received `value` as an offset.
              */
-            private function _patchDoublets(doublets:Array, value:Number):void {
+            private function _patchDoublets(doublets:Array, value:Number, offsetMode:Boolean = false):void {
                 for (var i:int = 0; i < doublets.length; i++) {
-                    _patchDoublet(doublets[i], value);
+                    _patchDoublet(doublets[i], value, offsetMode);
                 }
             }
             
@@ -326,9 +398,17 @@
              *
              * @param   value
              *          Assumed valid Number to use.
+             *
+             * @param   offsetMode
+             *          optional. If `true`, treats received `value` as an offset.
              */
-            private function _patchDoublet(doublet:Array, value:Number):void {
-                doublet[1] = value;
+            private function _patchDoublet(doublet:Array, value:Number, offsetMode:Boolean = false):void {
+                if (offsetMode) {
+                    doublet[1] += value;
+                }
+                else {
+                    doublet[1] = value;
+                }
             }
             
             /**
@@ -349,10 +429,10 @@
             }
             
             /**
-             * Listener. Executes when a single selected node's value has been changed
-             * through the Numeric Stepper component.
+             * Delegatee of both `_onNodeValueChanged` and `_onNodesOffsetChanged`;
+             * instruments actual data provider patching and associated notification.
              */
-            private function _onNodeValueChanged(event:Event):void {
+            private function _doPatching(event:Event, offsetMode:Boolean = false):void {
                 if (!_dataProvider || !event || !event.target) {
                     return;
                 }
@@ -367,13 +447,31 @@
                     return;
                 }
             
-                _patchDataProvider(_dataProvider, value);
+                // Calculate the delta/displacement relative to the last
+                // known value.
+                if (offsetMode) {
+                    const deltaValue:Number = (value - _currOffset);
+                    _currOffset = value;
+                }
+            
+                _patchDataProvider(_dataProvider, offsetMode ? deltaValue : value, offsetMode);
                 dispatchEvent(new NodalEvent(NodalEvent.SELECTION_PATCH, _dataProvider));
             }
             
-            override protected function updateDisplayList(w:Number, h:Number):void {
-                super.updateDisplayList(w, h);
-                trace (w, h);
+            /**
+             * Listener. Executes when a single selected node's value has been changed
+             * through the "Value" Numeric Stepper component.
+             */
+            private function _onNodeValueChanged(event:Event):void {
+                _doPatching(event);
+            }
+            
+            /**
+             * Listener. Executes when several selected node's offset has been changed
+             * through the "Offset" Numeric Stepper component.
+             */
+            private function _onNodesOffsetChanged(event:Event):void {
+                _doPatching(event, true);
             }
         ]]>
     </fx:Script>
@@ -386,73 +484,77 @@
     <!-- Shown when there is something selected -->
     <s:Label text="{chartName} ({_numNodes} {(_numNodes === 1)? 'node' : 'nodes'})"
         styleName="{getStyle('bodyStyle')}"
-        visible="{!!_numNodes}" includeInLayout="{!!_numNodes}"/>
+        visible="{_haveSelection}" includeInLayout="{_haveSelection}"/>
 
     <!-- Shown when there is no selection -->
     <s:Label text="none"
         styleName="{getStyle('bodyStyle')}"
-        visible="{!_numNodes}" includeInLayout="{!_numNodes}"/>
+        visible="{!_haveSelection}" includeInLayout="{!_haveSelection}"/>
 
     <!-- Time (only shown for single selection) -->
     <s:Label text="Time:"
         styleName="{getStyle('headerStyle')}"
         width="100%" textAlign="right"
-        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}"/>
+        visible="{_haveSingleSelection}" includeInLayout="{_haveSingleSelection}"/>
 
     <s:Label text="{_currNodeTime}"
         styleName="{getStyle('bodyStyle')}"
-        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}"/>
-
-    <!-- Value (only shown for single selection) -->
-    <s:Label text="Value:"
-        styleName="{getStyle('headerStyle')}"
-        width="100%" textAlign="right"
-        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}"/>
-
-    <s:HGroup padding="0" gap="5" verticalAlign="middle"
-        visible="{_numNodes === 1}" includeInLayout="{_numNodes === 1}">
-
-        <s:NumericStepper value="{_currValue}"
-            minimum="0" maximum="100" stepSize="1"
-            change="{_onNodeValueChanged (event)}"/>
-
-        <s:Label text="%" styleName="{getStyle('bodyStyle')}"/>
-    </s:HGroup>
+        visible="{_haveSingleSelection}" includeInLayout="{_haveSingleSelection}"/>
 
     <!-- Range (only shown for multiple selection) -->
     <s:Label text="Range:" styleName="{getStyle('headerStyle')}"
         width="100%" textAlign="right"
-        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}"/>
+        visible="{_haveMultipleSelection}" includeInLayout="{_haveMultipleSelection}"/>
 
+    <!-- Notice about an empty range -->
+    <s:Label text="all same value"
+        styleName="{getStyle('bodyStyle')}"
+        visible="{_haveEmptyRange}" includeInLayout="{_haveEmptyRange}"/>
+
+    <!-- Range description and utility buttons (only shown for non-empty range) -->
     <s:HGroup padding="0" gap="5" verticalAlign="middle"
-        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}">
+        visible="{_haveRange}" includeInLayout="{_haveRange}">
 
-        <s:Button label="{_minRangeValue} %"
-            click="_setAllTo (_minRangeValue)"/>
+        <s:Label text="{_minRangeValue}% → {_maxRangeValue}% (avg: {_avgRangeValue}%)"
+            styleName="{getStyle('bodyStyle')}"/>
 
-        <s:Label text="→" styleName="{getStyle('bodyStyle')}"/>
+        <s:Button label="↓" toolTip="Floor" width="40"
+            click="_setAllTo (_minRangeValue)" styleName="{getStyle('buttonStyle')}"/>
 
-        <s:Button label="{_maxRangeValue} %"
-            click="_setAllTo (_maxRangeValue)"/>
+        <s:Button label="↑" toolTip="Ceil" width="40"
+            click="_setAllTo (_maxRangeValue)" styleName="{getStyle('buttonStyle')}"/>
 
-        <s:Label text="(average:" styleName="{getStyle('bodyStyle')}"/>
+        <s:Button label="÷" toolTip="Middle" width="40"
+            click="_setAllTo (_avgRangeValue)" styleName="{getStyle('buttonStyle')}"/>
 
-        <s:Button label="{_avgRangeValue} %"
-            click="_setAllTo (_avgRangeValue)"/>
-
-        <s:Label text=")" styleName="{getStyle('bodyStyle')}"/>
     </s:HGroup>
 
-    <!-- "Anchor" (only shown for multiple selection) -->
-    <s:Label text="Anchor:" styleName="{getStyle('headerStyle')}"
+    <!-- Value/Offset reusable label -->
+    <s:Label text="{_haveCommonValue? 'Value' : 'Offset'}:"
+        styleName="{getStyle('headerStyle')}"
         width="100%" textAlign="right"
-        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}"/>
+        visible="{_haveSelection}"
+        includeInLayout="{_haveSelection}"/>
 
+    <!-- Value/Offset reusable container -->
     <s:HGroup padding="0" gap="5" verticalAlign="middle"
-        visible="{_numNodes &gt; 1}" includeInLayout="{_numNodes &gt; 1}">
+        visible="{_haveSelection}"
+        includeInLayout="{_haveSelection}">
 
-        <s:Button label="{_anchorValue} %"
-            click="_setAllTo (_anchorValue)"/>
+        <s:NumericStepper id="valueNs"
+            value="{_currValue}"
+            minimum="0" maximum="100" stepSize="1"
+            change="{_onNodeValueChanged (event)}"
+            visible="{_haveCommonValue}" includeInLayout="{_haveCommonValue}"/>
+
+        <s:NumericStepper id="offsetNs"
+            minimum="{_offsetMin}"
+            maximum="{_offsetMax}"
+            stepSize="1"
+            change="{_onNodesOffsetChanged (event)}"
+            visible="{_haveRange}" includeInLayout="{_haveRange}"/>
+
+        <s:Label text="%" styleName="{getStyle('bodyStyle')}"/>
     </s:HGroup>
 
 </s:TileGroup>
