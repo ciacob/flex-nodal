@@ -411,19 +411,23 @@
              * @param   doublet
              *          Assumed non-null and validated doublet Array to patch.
              *
-             * @param   value
+             * @param   newValue
              *          Assumed valid Number to use.
              *
              * @param   offsetMode
              *          optional. If `true`, treats received `value` as an offset.
              */
-            private function _patchDoublet(doublet:Array, value:Number, offsetMode:Boolean = false):void {
+            private function _patchDoublet(doublet:Array, newValue:Number, offsetMode:Boolean = false):void {
+                var value : Number = doublet[1];
                 if (offsetMode) {
-                    doublet[1] += value;
+                    value += newValue;
                 }
                 else {
-                    doublet[1] = value;
+                    value = newValue;
                 }
+
+                value = Math.max (0, Math.min (1, value));
+                doublet[1] = value;
             }
             
             /**
