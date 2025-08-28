@@ -126,11 +126,7 @@ package com.github.ciacob.flexnodal.utils {
          * @param   nodes
          *          Optional vector with all the logical "nodes" that represent this chart. If given, their `screenX` and `screenY` properties will be respectively calculated and set, as a side effect.
          */
-        public static function computeChartCoords(
-                host:UIComponent,
-                availableWidth:Number,
-                availableHeight:Number,
-                nodes:Vector.<Node> = null):ChartCoordinates {
+        public static function computeChartCoords(host:UIComponent, availableWidth:Number, availableHeight:Number, nodes:Vector.<Node> = null):ChartCoordinates {
             if (!host || !availableWidth || !availableHeight) {
                 return ChartCoordinates.empty();
             }
@@ -162,11 +158,7 @@ package com.github.ciacob.flexnodal.utils {
                 }
             }
 
-            return new ChartCoordinates(
-                    plotsAreaX, plotsAreaY, plotsAreaW, plotsAreaH,
-                    bgAreaX, bgAreaY, bgAreaW, bgAreaH,
-                    drawnMarkerRadius
-                );
+            return new ChartCoordinates(plotsAreaX, plotsAreaY, plotsAreaW, plotsAreaH, bgAreaX, bgAreaY, bgAreaW, bgAreaH, drawnMarkerRadius);
         }
 
         /**
@@ -227,14 +219,11 @@ package com.github.ciacob.flexnodal.utils {
             // get Hue
             if (max == min) {
                 hue = 0;
-            }
-            else if (max == r) {
+            } else if (max == r) {
                 hue = (60 * (g - b) / (max - min) + 360) % 360;
-            }
-            else if (max == g) {
+            } else if (max == g) {
                 hue = (60 * (b - r) / (max - min) + 120);
-            }
-            else if (max == b) {
+            } else if (max == b) {
                 hue = (60 * (r - g) / (max - min) + 240);
             }
 
@@ -244,8 +233,7 @@ package com.github.ciacob.flexnodal.utils {
             // get Saturation
             if (max == 0) {
                 saturation = 0;
-            }
-            else {
+            } else {
                 saturation = (max - min) / max;
             }
 
@@ -310,6 +298,83 @@ package com.github.ciacob.flexnodal.utils {
             rgb = [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
             return rgb;
         }
+
+        /**
+         * Generates a v4-style UUID.
+         */
+        public static function makeUuid():String {
+            const hex:Function = function(c:int):String {
+                const chars:String = "0123456789abcdef";
+                return chars.charAt((c >> 4) & 0x0F) + chars.charAt(c & 0x0F);
+            };
+
+            const uuid:Array = [];
+            for (var i:int = 0; i < 16; i++) {
+                uuid[i] = Math.floor(Math.random() * 256);
+            }
+
+            uuid[6] = (uuid[6] & 0x0F) | 0x40; // version 4
+            uuid[8] = (uuid[8] & 0x3F) | 0x80; // variant 10x
+
+            return [hex(uuid[0]) + hex(uuid[1]) + hex(uuid[2]) + hex(uuid[3]),
+                hex(uuid[4]) + hex(uuid[5]),
+                hex(uuid[6]) + hex(uuid[7]),
+                hex(uuid[8]) + hex(uuid[9]),
+                hex(uuid[10]) + hex(uuid[11]) + hex(uuid[12]) + hex(uuid[13]) + hex(uuid[14]) + hex(uuid[15])].join("-");
+        }
+
+        /**
+         * Overridable function that translates a time percent (e.g., `0.5`) to a label.
+         * Default function just puts `time` in standard percent format (e.g. `50%`).
+         */
+        public static var timeToLabel:Function = function(time:Number):String {
+            return Helpers.toPercent(time) + '%';
+        };
+
+        /**
+         * Converts, e.g., `0.5` to `50`.
+         */
+        public static function toPercent(val:Number):int {
+            return Math.round(val * 100);
+        }
+
+        /**
+         * Converts, e.g., `50` to `0.5`.
+         */
+        public static function fromPercent(val:int):Number {
+            return val / 100;
+        }
+
+        /**
+         * Analyzes given `nodes` and returns an Object with their
+         * minimum, maximum and average values.
+         *
+         * @param   `nodes`
+         *           Assumed valid, non-empty Array of valid doublets.
+         *
+         * @return  An Object similar to:
+         *          {min: 0, max: 0.5, avg: 1}
+         */
+        public static function analyzeY(nodes:Array):Object {
+            var sum:Number = 0;
+            var min:Number = Number.MAX_VALUE;
+            var max:Number = -Number.MAX_VALUE;
+
+            for each (var node:Array in nodes) {
+                var y:Number = node[1];
+                if (y < min) {
+                    min = y;
+                }
+                if (y > max) {
+                    max = y;
+                }
+                sum += y;
+            }
+
+            var avg:Number = sum / nodes.length;
+            return {min: min, max: max, avg: avg};
+        }
+
 
     }
 }

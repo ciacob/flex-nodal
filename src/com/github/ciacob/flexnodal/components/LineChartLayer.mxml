@@ -174,11 +174,12 @@
             // The `chartName` property
             // ------------------------
             
-            // An immutable name to use for identifying this chart
+            // An immutable name to use for identifying this chart.
             private var _chartName:String;
             
             // Returns the name of this chart, either the one explicitly provided
-            // via its data provider, or a generated one.
+            // via its data provider, or a generated one. Can be `null` if no
+            // data provider was ever given.
             public function get chartName():String {
                 return _chartName;
             }
@@ -382,9 +383,17 @@
                     _nodes = _importValues(_dataProvider ? _dataProvider.values : null);
             
                     // Set chart name.
-                    _chartName = this.uid;
-                    if (_dataProvider && _dataProvider.name) {
-                        _chartName = Helpers.trim(_dataProvider.name) || _chartName;
+                    _chartName = null;
+                    if (_dataProvider) {
+                        _chartName = Helpers.trim(_dataProvider.name);
+                        if (!_chartName) {
+                            _chartName = Helpers.makeUuid();
+                        }
+                    }
+            
+                    // Set tooltip
+                    if (_chartLayer) {
+                        _chartLayer.toolTip = _chartName;
                     }
             
                     // Set dash style, also provisioning the related engine as needed.
@@ -1155,6 +1164,10 @@
                     // (Re)draw and place marker.
                     _drawMarker(marker, nodeBgColor, thickness, markerRadius, node.isSynthetic, nodeBorderColor);
                     _positionMarker(marker, node);
+            
+                    // Set marker's tooltip
+                    marker.toolTip = (_chartName ? _chartName + ': ' : '') +
+                        Helpers.toPercent(node.logicalY) + '% at ' + Helpers.timeToLabel(node.logicalX);
                 }
             }
             

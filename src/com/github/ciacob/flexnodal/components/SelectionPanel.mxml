@@ -27,18 +27,23 @@
         <![CDATA[
             import spark.components.NumericStepper;
             import com.github.ciacob.flexnodal.events.NodalEvent;
+            import com.github.ciacob.flexnodal.utils.Helpers;
             
             // The name of the current chart; displayed at the top of the panel.
             [Bindable]
             public var chartName:String;
-            
-            /**
-             * Overridable function that translates a time percent (e.g., `0.5`) to a label.
-             * Default function just puts `time` in standard percent format (e.g. `50%`).
-             */
-            public var timeToLabel:Function = function(time:Number):String {
-                return _toPercent(time) + '%';
-            };
+
+            // Text and/or icon to display inside the "Floor" action button.
+            [Bindable]
+            public var floorBtnContent : Object = 'Floor';
+
+            // Text and/or icon to display inside the "Ceil" action button.
+            [Bindable]
+            public var ceilBtnContent : Object = 'Ceil';
+
+            // Text and/or icon to display inside the "Average" action button.
+            [Bindable]
+            public var averageBtnContent : Object = 'Average';
             
             // UI visibility flag to raise when there is any selection
             [Bindable]
@@ -188,22 +193,22 @@
             
                             // Common to single and multiple selection scenarios
                             const selectedNode:Array = _dataProvider.selectedNode;
-                            _currValue = _toPercent(selectedNode[1]);
-                            _currNodeTime = (timeToLabel !== null) ?
-                                timeToLabel(selectedNode[0]) : "";
+                            _currValue = Helpers.toPercent(selectedNode[1]);
+                            _currNodeTime = (Helpers.timeToLabel !== null) ?
+                                Helpers.timeToLabel(selectedNode[0]) : "";
             
                             // Multiple selection scenario
                             if (_numNodes > 1) {
-                                const stats:Object = _analyzeY(_dataProvider.selectedNodes);
-                                _minRangeValue = _toPercent(stats.min);
-                                _maxRangeValue = _toPercent(stats.max);
-                                _avgRangeValue = _toPercent(stats.avg);
+                                const stats:Object = Helpers.analyzeY(_dataProvider.selectedNodes);
+                                _minRangeValue = Helpers.toPercent(stats.min);
+                                _maxRangeValue = Helpers.toPercent(stats.max);
+                                _avgRangeValue = Helpers.toPercent(stats.avg);
             
                                 const hash:String = _hashSelectionContext(chartName, _dataProvider.selectedNodes);
                                 if (hash !== _selectionHash) {
                                     _selectionHash = hash;
-                                    _offsetMin = _toPercent(-stats.min);
-                                    _offsetMax = _toPercent(1 - stats.max);
+                                    _offsetMin = Helpers.toPercent(-stats.min);
+                                    _offsetMax = Helpers.toPercent(1 - stats.max);
                                     _currOffset = 0;
                                     offsetNs.value = 0;
                                 }
@@ -251,50 +256,6 @@
                     _minRangeValue !== _maxRangeValue;
                 _haveEmptyRange = (_haveMultipleSelection && !_haveRange);
                 _haveCommonValue = _haveSingleSelection || _haveEmptyRange;
-            }
-            
-            /**
-             * Converts, e.g., `0.5` to `50`.
-             */
-            private function _toPercent(val:Number):int {
-                return Math.round(val * 100);
-            }
-            
-            /**
-             * Converts, e.g., `50` to `0.5`.
-             */
-            private function _fromPercent(val:int):Number {
-                return val / 100;
-            }
-            
-            /**
-             * Analyzes given `nodes` and returns an Object with their
-             * minimum, maximum and average values.
-             *
-             * @param   `nodes`
-             *           Assumed valid, non-empty Array of valid doublets.
-             *
-             * @return  An Object similar to:
-             *          {min: 0, max: 0.5, avg: 1}
-             */
-            private function _analyzeY(nodes:Array):Object {
-                var sum:Number = 0;
-                var min:Number = Number.MAX_VALUE;
-                var max:Number = -Number.MAX_VALUE;
-            
-                for each (var node:Array in nodes) {
-                    var y:Number = node[1];
-                    if (y < min) {
-                        min = y;
-                    }
-                    if (y > max) {
-                        max = y;
-                    }
-                    sum += y;
-                }
-            
-                var avg:Number = sum / nodes.length;
-                return {min: min, max: max, avg: avg};
             }
             
             /**
@@ -442,7 +403,7 @@
                     return;
                 }
             
-                const value:Number = _fromPercent(percent);
+                const value:Number = Helpers.fromPercent(percent);
                 _patchDataProvider(_dataProvider, value);
                 dispatchEvent(new NodalEvent(NodalEvent.SELECTION_PATCH, _dataProvider));
             }
@@ -461,7 +422,7 @@
                     return;
                 }
             
-                const value:Number = _fromPercent(ns.value);
+                const value:Number = Helpers.fromPercent(ns.value);
                 if (isNaN(value)) {
                     return;
                 }
@@ -537,13 +498,13 @@
         <s:Label text="{_minRangeValue}% → {_maxRangeValue}% (avg: {_avgRangeValue}%)"
             styleName="{getStyle('bodyStyle')}"/>
 
-        <s:Button label="↓" toolTip="Floor" width="40"
+        <s:Button content="{floorBtnContent}" toolTip="Floor"
             click="_setAllTo (_minRangeValue)" styleName="{getStyle('buttonStyle')}"/>
 
-        <s:Button label="↑" toolTip="Ceil" width="40"
+        <s:Button content="{ceilBtnContent}" toolTip="Ceil"
             click="_setAllTo (_maxRangeValue)" styleName="{getStyle('buttonStyle')}"/>
 
-        <s:Button label="÷" toolTip="Middle" width="40"
+        <s:Button content="{averageBtnContent}" toolTip="Average"
             click="_setAllTo (_avgRangeValue)" styleName="{getStyle('buttonStyle')}"/>
 
     </s:HGroup>
