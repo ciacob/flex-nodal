@@ -129,6 +129,7 @@
             // ----------------------------
             // The `operatingMode` property
             // ----------------------------
+            public static const READONLY : int = -1;
             public static const NORMAL:int = 0;
             public static const EXCLUSIVE:int = 1;
             public static const ISOLATED:int = 2;
@@ -142,9 +143,12 @@
             
             /**
              * Returns the current operating mode for this component. Returned value
-             * is one of the `NORMAL`, `EXCLUSIVE` or `ISOLATED` constants defined by
+             * is one of the `READONLY`, `NORMAL`, `EXCLUSIVE` or `ISOLATED` constants defined by
              * this class.
              *
+             * READONLY prevents editing of any chart, including the active one. No
+             * nodes are displayed, thus, no selection or manipulation is possible.
+             * 
              * NORMAL allows immediate access to all charts via clicking their lines.
              * The active chart is fully opaque while the others are semi-transparent.
              * Both active and inactive charts display selectable and draggable nodes.
@@ -485,7 +489,7 @@
                     if (!chart) {
                         continue;
                     }
-                    chart.editable = (_activeChart === chart) || (_operatingMode === NORMAL);
+                    chart.editable = _operatingMode !== READONLY && (_activeChart === chart || _operatingMode === NORMAL);
                     chart.visible = (_activeChart === chart) || (operatingMode !== ISOLATED);
                 }
             }

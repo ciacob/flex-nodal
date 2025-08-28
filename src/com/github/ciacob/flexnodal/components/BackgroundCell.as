@@ -6,11 +6,11 @@ package com.github.ciacob.flexnodal.components {
     import flash.display.Graphics;
     import spark.components.Group;
 
-    [Style(name="textFontSize", type="Number", inherit="false")]
-    [Style(name="textColor", type="uint", inherit="false")]
-    [Style(name="padding", type="uint", inherit="false")]
-    [Style(name="bgColor", type="uint", format="Color", inherit="false")]
-    [Style(name="bgAlpha", type="Number", inherit="false")]
+    [Style(name = "textFontSize", type = "Number", inherit = "false")]
+    [Style(name = "textColor", type = "uint", inherit = "false")]
+    [Style(name = "padding", type = "uint", inherit = "false")]
+    [Style(name = "bgColor", type = "uint", format = "Color", inherit = "false")]
+    [Style(name = "bgAlpha", type = "Number", inherit = "false")]
 
     /**
      * Represents a single labeled row or column drawn inside the background chart layer.
@@ -136,15 +136,18 @@ package com.github.ciacob.flexnodal.components {
             g.beginFill(bgColor, bgAlpha);
             g.drawRect(0, 0, uW, uH);
 
-            // Position and style the label, if any
+            // Position and decide whether to show the label (if any)
             if (_labelComponent) {
 
                 // Bottom left, not changeable
-                const textPadding : Number = Math.max (2, padding / 2);
+                const textPadding:Number = Math.max(2, padding / 2);
                 _labelComponent.x = textPadding;
                 _labelComponent.y = uH - textPadding - _labelComponent.height;
-                _labelComponent.maxWidth = Math.max (0, uW - padding * 2);
-                _labelComponent.maxHeight = Math.max (0, uH - padding * 2);
+
+                // Only show if it can fit
+                const availableLabelW:Number = Math.max(0, uW - padding * 2);
+                const availableLabelH:Number = Math.max(0, uH - padding * 2);
+                _labelComponent.visible = _labelComponent.width <= availableLabelW && _labelComponent.height <= availableLabelH;
             }
         }
 

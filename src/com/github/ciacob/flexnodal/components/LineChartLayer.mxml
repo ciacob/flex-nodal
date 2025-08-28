@@ -36,6 +36,11 @@
             import flash.geom.Point;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
             import flash.events.MouseEvent;
+            import com.github.ciacob.flexnodal.utils.DashGraphics;
+            
+            // Storage for the alternate graphics engine we use for drawing
+            // dashed lines instead of solid lines.
+            private var _dashGraphics:DashGraphics;
             
             // The container to draw background decorations in
             private var _bgLayer:UIComponent;
@@ -176,7 +181,23 @@
             // via its data provider, or a generated one.
             public function get chartName():String {
                 return _chartName;
+            }
             
+            // ------------------------
+            // The `dashStyle` property
+            // ------------------------
+            
+            // Immutable dash style to use for rendering the chart line. If null,
+            // a solid line will be used. Values are in pixels, odd for strokes,
+            // even for gaps.
+            private var _dashStyle:Vector.<Number>;
+            
+            /**
+             * Returns the dash style for this chart, if one was ever set.
+             * Returns `null` otherwise.
+             */
+            public function get dashStyle():Vector.<Number> {
+                return _dashStyle.concat();
             }
             
             // ----------------------
@@ -251,7 +272,7 @@
                 // N.B.: `clearSelection` empties out `selectionManager.selectedNodes`:
                 // therefore, we need to loop over a clone instead.
                 const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes.concat();
-
+            
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
                 }
@@ -302,7 +323,7 @@
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
                 }
-
+            
                 if (selectedNodes.length != selectedNodes.length) {
                     return;
                 }
@@ -353,6 +374,7 @@
             override protected function commitProperties():void {
                 super.commitProperties();
             
+                // Data provider
                 if (_dataProviderChanged) {
                     _dataProviderChanged = false;
             
@@ -363,6 +385,15 @@
                     _chartName = this.uid;
                     if (_dataProvider && _dataProvider.name) {
                         _chartName = Helpers.trim(_dataProvider.name) || _chartName;
+                    }
+            
+                    // Set dash style, also provisioning the related engine as needed.
+                    _dashStyle = _dataProvider.dashStyle ? Vector.<Number>(_dataProvider.dashStyle) : null;
+                    if (_dashStyle && !_dashGraphics) {
+                        _dashGraphics = new DashGraphics(graphics);
+                    }
+                    if (!_dashStyle && _dashGraphics) {
+                        _dashGraphics = null;
                     }
             
                     // Set up the selection manager.
@@ -380,11 +411,13 @@
                     invalidateDisplayList();
                 }
             
+                // Markers factory
                 if (_markersFactoryChanged) {
                     _markersFactoryChanged = false;
                     invalidateDisplayList();
                 }
             
+                // Editable
                 if (_editableChanged) {
                     _editableChanged = false;
                     if (_selectionManager && !_editable) {
@@ -1037,7 +1070,6 @@
                 }
             
                 const g:Graphics = _chartLayer.graphics;
-                g.clear();
             
                 // Styles
                 const lineColor:uint = Helpers.$getStyle(this, "lineColor", DefaultStyles.DEFAULT_LINE_COLOR);
@@ -1046,15 +1078,14 @@
                 const lineColorAnchor:uint = Helpers.$getStyle(this, "lineColorAnchor", DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
                 const thickness:Number = Helpers.$getStyle(this, "lineThickness", DefaultStyles.DEFAULT_LINE_THICKNESS);
             
-                // 1) Draw the invisible, mouse-catch layer.
+                // Draw the invisible, mouse-catch layer.
                 _drawChartLines(g, nodes, thickness * 4, 0, 0.001);
             
-                // 2) Draw the actual polyline.
-                _drawChartLines(g, nodes, thickness, lineColor);
+                // Draw the actual polyline, solid or dashed, based on `_dashStyle`.
+                _drawChartLines(_dashGraphics || g, nodes, thickness, lineColor);
             
-                // 3) Draw and place markers whose nodes are dirty.
+                // Draw and place markers.
                 if (_editable) {
-            
                     _updateMarkers(
                             nodes,
                             thickness,
@@ -1070,9 +1101,19 @@
             /**
              * Draws only the line path for the chart.
              */
-            private function _drawChartLines(g:Graphics, nodes:Vector.<Node>,
+            private function _drawChartLines(g:Object, nodes:Vector.<Node>,
                     thickness:Number, strokeColor:uint, alpha:Number = 1):void {
+            
+                g.clear();
                 g.lineStyle(thickness, strokeColor, alpha);
+            
+                var linerFn:Function = g.lineTo;
+            
+                if (g is DashGraphics) {
+                    const $g:DashGraphics = (g as DashGraphics);
+                    $g.dashedLineStyle(_dashStyle);
+                    linerFn = $g.dashLineTo;
+                }
             
                 for (var i:int = 0; i < nodes.length; i++) {
                     const node:Node = nodes[i];
@@ -1080,7 +1121,7 @@
                         g.moveTo(node.screenX, node.screenY);
                     }
                     else {
-                        g.lineTo(node.screenX, node.screenY);
+                        linerFn(node.screenX, node.screenY);
                     }
                 }
             }
