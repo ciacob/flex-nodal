@@ -124,7 +124,9 @@
              */
             [Bindable]
             public function set dataProvider(value:Object):void {
-                if (_dataProvider !== value) {
+
+                // Data provider cannot be `null`.
+                if (_dataProvider !== value && value !== null) {
                     _dataProvider = value;
                     _dataProviderChanged = true;
                     invalidateProperties();
@@ -397,11 +399,13 @@
                     }
             
                     // Set dash style, also provisioning the related engine as needed.
-                    _dashStyle = _dataProvider.dashStyle ? Vector.<Number>(_dataProvider.dashStyle) : null;
+                    _dashStyle = (_dataProvider && _dataProvider.dashStyle) ?
+                        Vector.<Number>(_dataProvider.dashStyle) : null;
                     if (_dashStyle && !_dashGraphics) {
                         _dashGraphics = new DashGraphics(graphics);
                     }
                     if (!_dashStyle && _dashGraphics) {
+                        _dashGraphics.clear();
                         _dashGraphics = null;
                     }
             
@@ -607,12 +611,12 @@
              */
             private function _importValues(values:Array):Vector.<Node> {
                 var nodes:Vector.<Node> = new <Node>[];
-                if (!values || values.length == 0) {
-                    return nodes;
-                }
-                for (var i:int = 0; i < values.length; i++) {
+            
+                const numValues:uint = values ? values.length : 0;
+                for (var i:int = 0; i < numValues; i++) {
                     nodes.push(new Node(values[i][0], values[i][1], false));
                 }
+            
                 nodes = _proofNodes(nodes);
                 return nodes;
             }
@@ -778,6 +782,7 @@
                                 _dragBoundsChanged = true;
                             }
                             invalidateDisplayList();
+                            _dataProvider.values = _exportNodes(_nodes);
                         }
                         break;
             

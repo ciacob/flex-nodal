@@ -28,6 +28,8 @@
             import mx.styles.IStyleManager2;
             import com.github.ciacob.flexnodal.Nodal;
             import mx.collections.ArrayCollection;
+            import mx.collections.ArrayCollection;
+            import mx.events.CollectionEvent;
             
             // Helper style manager for reading styles before they actually get
             // applied to our component.
@@ -84,7 +86,15 @@
             [Bindable]
             public function set dataProvider(value:ArrayCollection):void {
                 if (value !== _dataProvider) {
+                    if (_dataProvider) {
+                        _unwireProvider(_dataProvider);
+                    }
+            
                     _dataProvider = value;
+                    if (_dataProvider) {
+                        _wireProvider(_dataProvider);
+                    }
+            
                     _dataProviderChanged = true;
                     invalidateProperties();
                 }
@@ -129,7 +139,7 @@
             // ----------------------------
             // The `operatingMode` property
             // ----------------------------
-            public static const READONLY : int = -1;
+            public static const READONLY:int = -1;
             public static const NORMAL:int = 0;
             public static const EXCLUSIVE:int = 1;
             public static const ISOLATED:int = 2;
@@ -148,7 +158,7 @@
              *
              * READONLY prevents editing of any chart, including the active one. No
              * nodes are displayed, thus, no selection or manipulation is possible.
-             * 
+             *
              * NORMAL allows immediate access to all charts via clicking their lines.
              * The active chart is fully opaque while the others are semi-transparent.
              * Both active and inactive charts display selectable and draggable nodes.
@@ -198,13 +208,13 @@
              *          made active.
              */
             public function set activeChartItem(item:Object):void {
-                if (!item || !_dataProvider || !chartLayers || !chartLayers.numElements) {
+                if (!item || !_dataProvider || !chartsLayer || !chartsLayer.numElements) {
                     return;
                 }
             
                 var chart:LineChartLayer = null;
-                for (var i:int = 0; i < chartLayers.numElements; i++) {
-                    chart = chartLayers.getElementAt(i) as LineChartLayer;
+                for (var i:int = 0; i < chartsLayer.numElements; i++) {
+                    chart = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (!chart) {
                         continue;
                     }
@@ -239,16 +249,16 @@
                 }
                 _activeChart.deleteSelection(false);
             }
-
+            
             /**
              * Rewrites the values of all selected nodes of the active chart, if
              * applicable.
              */
-            public function patchSelection (patch : Object, dispatch:Boolean = false) : void {
+            public function patchSelection(patch:Object, dispatch:Boolean = false):void {
                 if (!_activeChart || !patch) {
                     return;
                 }
-                _activeChart.patchSelection (patch, dispatch);
+                _activeChart.patchSelection(patch, dispatch);
             }
             
             /**
@@ -261,19 +271,22 @@
                 if (_dataProviderChanged) {
             
                     _dataProviderChanged = false;
-                    _provisionChartLayers(_dataProvider, chartLayers);
+                    _provisionChartLayers(_dataProvider, chartsLayer);
                     _populateChartLayers(_dataProvider);
                     _styleChartLayers();
                     _styleBackgroundLayer();
             
                     // Automatically activate the last chart added.
-                    const topChart:LineChartLayer = (chartLayers && chartLayers.numElements > 0) ?
-                        chartLayers.getElementAt(chartLayers.numElements - 1) as LineChartLayer : null;
+                    const topChart:LineChartLayer = (chartsLayer && chartsLayer.numElements > 0) ?
+                        chartsLayer.getElementAt(chartsLayer.numElements - 1) as LineChartLayer : null;
                     _setActiveChart(topChart);
-                    dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
+                    _setChartsAvailability(_operatingMode);
+                    if (topChart) {
+                        dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
+                    }
                     invalidateDisplayList();
                 }
-
+            
                 // Grid data provider
                 if (_gridDataProviderChanged) {
                     _gridDataProviderChanged = false;
@@ -340,10 +353,10 @@
              * charts.
              */
             private function _provisionChartLayers(dataProvider:ArrayCollection, container:Group):void {
-                if (!_chartsFactory || !dataProvider || !container) {
+                if (!_chartsFactory || !container) {
                     return;
                 }
-                const numCharts:uint = dataProvider.length;
+                const numCharts:uint = dataProvider ? dataProvider.length : 0;
             
                 // Append
                 while (container.numElements < numCharts) {
@@ -367,12 +380,12 @@
              * to the available charts.
              */
             private function _populateChartLayers(_dataProvider:ArrayCollection):void {
-                if (!_dataProvider || !_dataProvider.length || !chartLayers) {
+                if (!_dataProvider || !_dataProvider.length || !chartsLayer) {
                     return;
                 }
             
                 for (var i:int = 0; i < _dataProvider.length; i++) {
-                    const chart:LineChartLayer = chartLayers.getElementAt(i) as LineChartLayer;
+                    const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (chart) {
                         chart.dataProvider = _dataProvider[i];
                     }
@@ -437,7 +450,7 @@
              * provided base color. Sets compiled styles to each chart, respectively.
              */
             private function _styleChartLayers():void {
-                if (!chartLayers || !chartLayers.numElements) {
+                if (!chartsLayer || !chartsLayer.numElements) {
                     return;
                 }
             
@@ -458,9 +471,9 @@
                 _defaultAlpha = $g(chartStyles, 'defaultAlpha', DefaultStyles.DEFAULT_CHART_ALPHA);
             
                 // Set styles on each available chart. Also initialize chart alpha.
-                for (var i:int; i < chartLayers.numElements; i++) {
-                    const hueFactor:Number = i / chartLayers.numElements;
-                    const chart:LineChartLayer = chartLayers.getElementAt(i) as LineChartLayer;
+                for (var i:int; i < chartsLayer.numElements; i++) {
+                    const hueFactor:Number = i / chartsLayer.numElements;
+                    const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (!chart) {
                         continue;
                     }
@@ -481,11 +494,11 @@
              * `operatingMode`.
              */
             private function _setChartsAvailability(operatingMode:int):void {
-                if (!chartLayers || !chartLayers.numElements) {
+                if (!chartsLayer || !chartsLayer.numElements) {
                     return;
                 }
-                for (var i:int; i < chartLayers.numElements; i++) {
-                    const chart:LineChartLayer = chartLayers.getElementAt(i) as LineChartLayer;
+                for (var i:int; i < chartsLayer.numElements; i++) {
+                    const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (!chart) {
                         continue;
                     }
@@ -500,7 +513,7 @@
              */
             private function _setActiveChart(chart:LineChartLayer):void {
             
-                if (!chartLayers || !chartLayers.numElements || chart === _activeChart) {
+                if (!chartsLayer || !chartsLayer.numElements || chart === _activeChart) {
                     return;
                 }
             
@@ -515,10 +528,24 @@
                     _wireChart(chart);
             
                     chart.alpha = 1;
-                    if (chartLayers.getElementAt(chartLayers.numElements - 1) !== chart) {
-                        chartLayers.setElementIndex(chart, chartLayers.numElements - 1);
+                    if (chartsLayer.getElementAt(chartsLayer.numElements - 1) !== chart) {
+                        chartsLayer.setElementIndex(chart, chartsLayer.numElements - 1);
                     }
                 }
+            }
+            
+            /**
+             * Removes any event listeners from given provider.
+             */
+            private function _unwireProvider(provider:ArrayCollection):void {
+                provider.removeEventListener(CollectionEvent.COLLECTION_CHANGE, _onDpAltered);
+            }
+            
+            /**
+             * Adds needed event listeners to given provider.
+             */
+            private function _wireProvider(provider:ArrayCollection):void {
+                provider.addEventListener(CollectionEvent.COLLECTION_CHANGE, _onDpAltered);
             }
             
             /**
@@ -555,6 +582,17 @@
             }
             
             /**
+             * Listener. Executed when the current data provider is "changed in place" without
+             * being replaced, i.e., an item is added or removed.
+             */
+            private function _onDpAltered(event:CollectionEvent):void {
+                _dataProviderChanged = true;
+                invalidateProperties();
+            
+                // To consider: only build/destroy affected items, without rebuilding everything.
+            }
+            
+            /**
              * Listener. Executed when the active chart layer dispatched a `selectionChange`
              * event.
              */
@@ -569,7 +607,7 @@
              * event.
              */
             private function _onNodesChanged(event:NodalEvent):void {
-                if (!_dataProvider || !chartLayers || !chartLayers.numElements) {
+                if (!_dataProvider || !chartsLayer || !chartsLayer.numElements) {
                     return;
                 }
                 const chart:LineChartLayer = event.target as LineChartLayer;
@@ -628,7 +666,7 @@
                 />
 
             <!-- Container for all chart layers -->
-            <s:Group id="chartLayers"
+            <s:Group id="chartsLayer"
                 width="100%" height="100%"/>
 
         </s:Group>
