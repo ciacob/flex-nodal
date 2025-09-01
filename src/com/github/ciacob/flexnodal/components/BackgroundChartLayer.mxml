@@ -28,8 +28,6 @@
             import com.github.ciacob.flexnodal.components.BackgroundCell;
             import com.github.ciacob.flexnodal.components.BackgroundCell;
             import com.github.ciacob.flexnodal.components.BackgroundCell;
-            import mx.collections.Sort;
-            import mx.collections.SortField;
             
             // The container to draw background decorations in
             private var _bgLayer:Group;
@@ -230,10 +228,11 @@
                 }
             
                 // Cache limits for faster access.
-                var $top:Number = coords.bgAreaY;
-                var $left:Number = coords.bgAreaX;
-                var $width:Number = coords.bgAreaW;
-                var $height:Number = coords.bgAreaH;
+                const markerRadius : Number = coords.drawnMarkerRadius;
+                const $top:Number = coords.plotsAreaY + markerRadius;
+                const $left:Number = coords.plotsAreaX + markerRadius;
+                const $width:Number = coords.plotsAreaW - markerRadius * 2;
+                const $height:Number = coords.plotsAreaH - markerRadius * 2;
             
                 // Read and cache styles (colors & alpha)
                 const xAxisColor:uint = Helpers.$getStyle(this, "xAxisColor", DefaultStyles.DEFAULT_X_AXIS_COLOR);
