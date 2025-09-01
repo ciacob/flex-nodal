@@ -30,6 +30,13 @@
             import mx.collections.ArrayCollection;
             import mx.collections.ArrayCollection;
             import mx.events.CollectionEvent;
+            import spark.filters.DropShadowFilter;
+            
+            /**
+             * Overridable, global `DropShadowFilter` instance to be used underneath the active
+             * chart line. Set to `null` to disable.
+             */
+            public static var ACTIVE_CHART_SHADOW:DropShadowFilter = new DropShadowFilter(0, 0, 0, 0.4, 8, 8);
             
             // Helper style manager for reading styles before they actually get
             // applied to our component.
@@ -225,7 +232,6 @@
             
                 _setActiveChart(chart);
                 _setChartsAvailability(_operatingMode);
-                invalidateDisplayList();
             }
             
             /**
@@ -450,7 +456,8 @@
              * provided base color. Sets compiled styles to each chart, respectively.
              */
             private function _styleChartLayers():void {
-                if (!chartsLayer || !chartsLayer.numElements) {
+                if (!chartsLayer || !chartsLayer.numElements ||
+                        !_dataProvider || _dataProvider.length !== chartsLayer.numElements) {
                     return;
                 }
             
@@ -472,11 +479,17 @@
             
                 // Set styles on each available chart. Also initialize chart alpha.
                 for (var i:int; i < chartsLayer.numElements; i++) {
-                    const hueFactor:Number = i / chartsLayer.numElements;
                     const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (!chart) {
                         continue;
                     }
+            
+                    const chartDp:Object = _dataProvider.getItemAt(i);
+                    if (!chartDp) {
+                        continue;
+                    }
+            
+                    const hueFactor:Number = !isNaN(chartDp.hueFactor) ? Number(chartDp.hueFactor) : 0;
                     const $s:Function = chart.setStyle;
                     $s('padding', padding);
                     $s('lineThickness', lineThickness);
@@ -497,6 +510,7 @@
                 if (!chartsLayer || !chartsLayer.numElements) {
                     return;
                 }
+            
                 for (var i:int; i < chartsLayer.numElements; i++) {
                     const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (!chart) {
@@ -504,6 +518,8 @@
                     }
                     chart.editable = _operatingMode !== READONLY && (_activeChart === chart || _operatingMode === NORMAL);
                     chart.visible = (_activeChart === chart) || (operatingMode !== ISOLATED);
+                    chart.filters = (_activeChart === chart && _operatingMode != ISOLATED && ACTIVE_CHART_SHADOW) ?
+                        [ACTIVE_CHART_SHADOW] : null;
                 }
             }
             
@@ -645,6 +661,7 @@
                     return;
                 }
                 _setActiveChart(chart);
+                _setChartsAvailability(_operatingMode);
                 dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, chart.dataProvider));
             }
         ]]>
