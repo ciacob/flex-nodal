@@ -982,6 +982,10 @@
                 const selNodes:Vector.<Node> = _selectionManager.selectedNodes;
                 const numSelNodes:uint = selNodes.length;
                 const numNodes:uint = _nodes.length;
+                
+                // Marker is drawn as a circle with fill, and a half-the-radius thick stroke,
+                // centered on its path.
+                const markerSize : int = _lastKnownCoords.drawnMarkerRadius * 2.5; 
             
                 var leftDelta:Number = NaN;
                 var topDelta:Number = NaN;
@@ -1040,7 +1044,7 @@
                         // practically convert them to genuine nodes).
                         const leftSibling:Node = _nodes[nodeIndex - 1];
                         if (!leftSibling.isSynthetic && !leftSibling.isSelected) {
-                            ld = leftSibling.screenX - selNode.screenX;
+                            ld = leftSibling.screenX - selNode.screenX + markerSize;
                             if (leftDelta < ld) {
                                 leftDelta = ld;
                             }
@@ -1048,7 +1052,7 @@
             
                         const rightSibling:Node = _nodes[nodeIndex + 1];
                         if (!rightSibling.isSynthetic && !rightSibling.isSelected) {
-                            rd = rightSibling.screenX - selNode.screenX;
+                            rd = rightSibling.screenX - selNode.screenX - markerSize;
                             if (rightDelta > rd) {
                                 rightDelta = rd;
                             }
