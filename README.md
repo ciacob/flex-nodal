@@ -41,4 +41,4 @@ git clone https://github.com/ciacob/flex-nodal.git
 - Tests and demos reside in `flex-nodal-tester` and should accompany significant changes.
 
 ## License
-*No explicit license file is provided; contact the maintainers for usage terms.*
+Licensed under the [MIT](https://github.com/ciacob/flex-nodal/blob/master/LICENSE) license terms.
