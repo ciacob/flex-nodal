@@ -24,9 +24,6 @@
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
             import mx.collections.ArrayCollection;
             import com.github.ciacob.flexnodal.utils.InstanceFactory;
-            import com.github.ciacob.flexnodal.utils.InstanceFactory;
-            import com.github.ciacob.flexnodal.components.BackgroundCell;
-            import com.github.ciacob.flexnodal.components.BackgroundCell;
             import com.github.ciacob.flexnodal.components.BackgroundCell;
             
             // The container to draw background decorations in
@@ -275,6 +272,9 @@
                         continue;
                     }
                     const cellStop:Number = isColumn ? stopValue : 1 - stopValue;
+
+                    // NOTE: there is no legit `0` value of `nextCellData.stop`. It will be either
+                    // `null` or at least `1`.
                     const nextStopValue:Number = (nextCellData && nextCellAxis === cellAxis) ?
                         Math.max(0, Math.min(1, nextCellData.stop)) || 1 : 1;
             

@@ -27,8 +27,6 @@
             import mx.styles.CSSStyleDeclaration;
             import mx.styles.IStyleManager2;
             import com.github.ciacob.flexnodal.Nodal;
-            import mx.collections.ArrayCollection;
-            import mx.collections.ArrayCollection;
             import mx.events.CollectionEvent;
             import spark.filters.DropShadowFilter;
             
@@ -478,7 +476,7 @@
                 _defaultAlpha = $g(chartStyles, 'defaultAlpha', DefaultStyles.DEFAULT_CHART_ALPHA);
             
                 // Set styles on each available chart. Also initialize chart alpha.
-                for (var i:int; i < chartsLayer.numElements; i++) {
+                for (var i:int = 0; i < chartsLayer.numElements; i++) {
                     const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (!chart) {
                         continue;

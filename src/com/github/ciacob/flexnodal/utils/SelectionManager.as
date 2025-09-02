@@ -11,8 +11,7 @@ package com.github.ciacob.flexnodal.utils {
          * @param   nodes
          *          The pool of nodes whose selection is to be managed.
          *          Selection is managed in-place, via Node's `isSelected`
-         *          property. Changed nodes will also be marked as "dirty",
-         *          by turning their `isDirty` flag on.
+         *          property.
          */
         public function SelectionManager(nodes:Vector.<Node>) {
             _nodes = nodes;
@@ -278,8 +277,7 @@ package com.github.ciacob.flexnodal.utils {
         }
 
         /**
-         * Marks all nodes as not selected, and marks "dirty" all the ones that were
-         * previously selected.
+         * Marks all nodes as not selected.
          *
          * @return  Returns`true` if at least one change in state took place,
          *          `false otherwise`.
