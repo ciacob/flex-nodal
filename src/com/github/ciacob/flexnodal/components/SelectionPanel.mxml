@@ -1,18 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<s:TileGroup
+<s:HGroup
     xmlns:fx="http://ns.adobe.com/mxml/2009"
     xmlns:s="library://ns.adobe.com/flex/spark"
-    xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:spark="mx.skins.spark.*"
-    requestedColumnCount="2"
-    columnAlign="justifyUsingGap"
-    rowAlign="justifyUsingGap"
+    xmlns:mx="library://ns.adobe.com/flex/mx"
+    xmlns:spark="mx.skins.spark.*"
 
-    padding="{getStyle ('padding') || 0}"
-    horizontalGap="{getStyle('horizontalGap') || 0}"
-    verticalGap="{getStyle('verticalGap') || 0}"
-    rowHeight="{getStyle('rowHeight') || 0}"
-    minHeight="{getStyle('minHeight') || 0}"
-
+    gap="{getStyle ('padding') || 0}"
+    minHeight="{getStyle('rowHeight') || 0}"
+    horizontalAlign="center"
     verticalAlign="middle">
 
     <fx:Metadata>
@@ -32,18 +27,18 @@
             // The name of the current chart; displayed at the top of the panel.
             [Bindable]
             public var chartName:String;
-
+            
             // Text and/or icon to display inside the "Floor" action button.
             [Bindable]
-            public var floorBtnContent : Object = 'Floor';
-
+            public var floorBtnContent:Object = 'Floor';
+            
             // Text and/or icon to display inside the "Ceil" action button.
             [Bindable]
-            public var ceilBtnContent : Object = 'Ceil';
-
+            public var ceilBtnContent:Object = 'Ceil';
+            
             // Text and/or icon to display inside the "Average" action button.
             [Bindable]
-            public var averageBtnContent : Object = 'Average';
+            public var averageBtnContent:Object = 'Average';
             
             // UI visibility flag to raise when there is any selection
             [Bindable]
@@ -379,15 +374,15 @@
              *          optional. If `true`, treats received `value` as an offset.
              */
             private function _patchDoublet(doublet:Array, newValue:Number, offsetMode:Boolean = false):void {
-                var value : Number = doublet[1];
+                var value:Number = doublet[1];
                 if (offsetMode) {
                     value += newValue;
                 }
                 else {
                     value = newValue;
                 }
-
-                value = Math.max (0, Math.min (1, value));
+            
+                value = Math.max(0, Math.min(1, value));
                 doublet[1] = value;
             }
             
@@ -456,85 +451,116 @@
         ]]>
     </fx:Script>
 
-    <!-- Chart name and number of selected nodes -->
-    <s:Label text="Selection:"
-        styleName="{getStyle('headerStyle')}"
-        width="100%" textAlign="right"/>
+    <!-- CELL: What is selected -->
+    <s:HGroup padding="0" verticalAlign="middle"
+        minHeight="{getStyle('rowHeight') || 0}"
+        gap="{getStyle('horizontalGap') || 0}">
 
-    <!-- Shown when there is something selected -->
-    <s:Label text="{chartName} ({_numNodes} {(_numNodes === 1)? 'node' : 'nodes'})"
-        styleName="{getStyle('bodyStyle')}"
-        visible="{_haveSelection}" includeInLayout="{_haveSelection}"/>
+        <!-- Chart name and number of selected nodes -->
+        <s:Label text="Selection:"
+            styleName="{getStyle('headerStyle')}"/>
 
-    <!-- Shown when there is no selection -->
-    <s:Label text="none"
-        styleName="{getStyle('bodyStyle')}"
-        visible="{!_haveSelection}" includeInLayout="{!_haveSelection}"/>
+        <!-- Shown when there is something selected -->
+        <s:Label text="{chartName} ({_numNodes} {(_numNodes === 1)? 'node' : 'nodes'})"
+            styleName="{getStyle('bodyStyle')}"
+            visible="{_haveSelection}" includeInLayout="{_haveSelection}"/>
 
-    <!-- Time (only shown for single selection) -->
-    <s:Label text="Time:"
-        styleName="{getStyle('headerStyle')}"
-        width="100%" textAlign="right"
-        visible="{_haveSingleSelection}" includeInLayout="{_haveSingleSelection}"/>
-
-    <s:Label text="{_currNodeTime}"
-        styleName="{getStyle('bodyStyle')}"
-        visible="{_haveSingleSelection}" includeInLayout="{_haveSingleSelection}"/>
-
-    <!-- Range (only shown for multiple selection) -->
-    <s:Label text="Range:" styleName="{getStyle('headerStyle')}"
-        width="100%" textAlign="right"
-        visible="{_haveMultipleSelection}" includeInLayout="{_haveMultipleSelection}"/>
-
-    <!-- Notice about an empty range -->
-    <s:Label text="all same value"
-        styleName="{getStyle('bodyStyle')}"
-        visible="{_haveEmptyRange}" includeInLayout="{_haveEmptyRange}"/>
-
-    <!-- Range description and utility buttons (only shown for non-empty range) -->
-    <s:HGroup padding="0" gap="5" verticalAlign="middle"
-        visible="{_haveRange}" includeInLayout="{_haveRange}">
-
-        <s:Label text="{_minRangeValue}% → {_maxRangeValue}% (avg: {_avgRangeValue}%)"
-            styleName="{getStyle('bodyStyle')}"/>
-
-        <s:Button content="{floorBtnContent}" toolTip="Floor"
-            click="_setAllTo (_minRangeValue)" styleName="{getStyle('buttonStyle')}"/>
-
-        <s:Button content="{ceilBtnContent}" toolTip="Ceil"
-            click="_setAllTo (_maxRangeValue)" styleName="{getStyle('buttonStyle')}"/>
-
-        <s:Button content="{averageBtnContent}" toolTip="Average"
-            click="_setAllTo (_avgRangeValue)" styleName="{getStyle('buttonStyle')}"/>
-
+        <!-- Shown when there is no selection -->
+        <s:Label text="none"
+            styleName="{getStyle('bodyStyle')}"
+            visible="{!_haveSelection}" includeInLayout="{!_haveSelection}"/>
     </s:HGroup>
 
-    <!-- Value/Offset reusable label -->
-    <s:Label text="{_haveCommonValue? 'Value' : 'Offset'}:"
-        styleName="{getStyle('headerStyle')}"
-        width="100%" textAlign="right"
-        visible="{_haveSelection}"
-        includeInLayout="{_haveSelection}"/>
+    <!-- CELL: Selection time -->
+    <s:HGroup padding="0" verticalAlign="middle"
+        minHeight="{getStyle('rowHeight') || 0}"
+        visible="{_haveSingleSelection}"
+        includeInLayout="{_haveSingleSelection}"
+        gap="{getStyle('horizontalGap') || 0}">
 
-    <!-- Value/Offset reusable container -->
-    <s:HGroup padding="0" gap="5" verticalAlign="middle"
-        visible="{_haveSelection}"
-        includeInLayout="{_haveSelection}">
+        <!-- Time (only shown for single selection) -->
+        <s:Label text="Time:"
+            styleName="{getStyle('headerStyle')}"
+            visible="{_haveSingleSelection}" includeInLayout="{_haveSingleSelection}"/>
 
-        <s:NumericStepper id="valueNs"
-            value="{_currValue}"
-            minimum="0" maximum="100" stepSize="1"
-            change="{_onNodeValueChanged (event)}"
-            visible="{_haveCommonValue}" includeInLayout="{_haveCommonValue}"/>
-
-        <s:NumericStepper id="offsetNs"
-            minimum="{_offsetMin}"
-            maximum="{_offsetMax}"
-            stepSize="1"
-            change="{_onNodesOffsetChanged (event)}"
-            visible="{_haveRange}" includeInLayout="{_haveRange}"/>
-
-        <s:Label text="%" styleName="{getStyle('bodyStyle')}"/>
+        <s:Label text="{_currNodeTime}"
+            styleName="{getStyle('bodyStyle')}"
+            visible="{_haveSingleSelection}" includeInLayout="{_haveSingleSelection}"/>
     </s:HGroup>
 
-</s:TileGroup>
+    <!-- CELL: Multiple selection (info & tools) -->
+    <s:HGroup padding="0" verticalAlign="middle"
+        minHeight="{getStyle('rowHeight') || 0}"
+        visible="{_haveMultipleSelection}"
+        includeInLayout="{_haveMultipleSelection}"
+        gap="{getStyle('horizontalGap') || 0}">
+
+        <!-- Range (only shown for multiple selection) -->
+        <s:Label text="Range:" styleName="{getStyle('headerStyle')}"
+            visible="{_haveMultipleSelection}" includeInLayout="{_haveMultipleSelection}"/>
+
+        <!-- Notice about an empty range -->
+        <s:Label text="all same value"
+            styleName="{getStyle('bodyStyle')}"
+            visible="{_haveEmptyRange}" includeInLayout="{_haveEmptyRange}"/>
+
+        <!-- Range description and utility buttons (only shown for non-empty range) -->
+        <s:HGroup padding="0" verticalAlign="middle"
+            gap="{getStyle('horizontalGap') || 0}"
+            minHeight="{getStyle('rowHeight') || 0}"
+            visible="{_haveRange}" includeInLayout="{_haveRange}">
+
+            <s:Label text="{_minRangeValue}% → {_maxRangeValue}% (avg: {_avgRangeValue}%)"
+                styleName="{getStyle('bodyStyle')}"/>
+
+            <s:Button content="{floorBtnContent}" toolTip="Set all to lowest"
+                click="_setAllTo (_minRangeValue)" styleName="{getStyle('buttonStyle')}"/>
+
+            <s:Button content="{ceilBtnContent}" toolTip="Set all to highest"
+                click="_setAllTo (_maxRangeValue)" styleName="{getStyle('buttonStyle')}"/>
+
+            <s:Button content="{averageBtnContent}" toolTip="Set all to average"
+                click="_setAllTo (_avgRangeValue)" styleName="{getStyle('buttonStyle')}"/>
+
+        </s:HGroup>
+    </s:HGroup>
+
+    <!-- CELL: Single/Common value/Offset (info & tools) -->
+    <s:HGroup padding="0" verticalAlign="middle"
+        minHeight="{getStyle('rowHeight') || 0}"
+        visible="{_haveSelection}"
+        includeInLayout="{_haveSelection}"
+        gap="{getStyle('horizontalGap') || 0}">
+
+        <!-- Value/Offset reusable label -->
+        <s:Label text="{_haveCommonValue? 'Value' : 'Offset'}:"
+            styleName="{getStyle('headerStyle')}"
+            visible="{_haveSelection}"
+            includeInLayout="{_haveSelection}"/>
+
+        <!-- Value/Offset reusable container -->
+        <s:HGroup padding="0"
+            minHeight="{getStyle('rowHeight') || 0}"
+            gap="{getStyle('horizontalGap') || 0}"
+            verticalAlign="middle"
+            visible="{_haveSelection}"
+            includeInLayout="{_haveSelection}">
+
+            <s:NumericStepper id="valueNs"
+                value="{_currValue}"
+                minimum="0" maximum="100" stepSize="1"
+                change="{_onNodeValueChanged (event)}"
+                visible="{_haveCommonValue}" includeInLayout="{_haveCommonValue}"/>
+
+            <s:NumericStepper id="offsetNs"
+                minimum="{_offsetMin}"
+                maximum="{_offsetMax}"
+                stepSize="1"
+                change="{_onNodesOffsetChanged (event)}"
+                visible="{_haveRange}" includeInLayout="{_haveRange}"/>
+
+            <s:Label text="%" styleName="{getStyle('bodyStyle')}"/>
+        </s:HGroup>
+    </s:HGroup>
+
+</s:HGroup>
