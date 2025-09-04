@@ -225,11 +225,10 @@
                 }
             
                 // Cache limits for faster access.
-                const markerRadius : Number = coords.drawnMarkerRadius;
-                const $top:Number = coords.plotsAreaY + markerRadius;
-                const $left:Number = coords.plotsAreaX + markerRadius;
-                const $width:Number = coords.plotsAreaW - markerRadius * 2;
-                const $height:Number = coords.plotsAreaH - markerRadius * 2;
+                var $top:Number = coords.bgAreaY;
+                var $left:Number = coords.bgAreaX;
+                var $width:Number = coords.bgAreaW;
+                var $height:Number = coords.bgAreaH;
             
                 // Read and cache styles (colors & alpha)
                 const xAxisColor:uint = Helpers.$getStyle(this, "xAxisColor", DefaultStyles.DEFAULT_X_AXIS_COLOR);

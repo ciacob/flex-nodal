@@ -1083,19 +1083,25 @@
              * Draws the line chart
              */
             private function _drawChart(nodes:Vector.<Node>, coords:ChartCoordinates):void {
-                if (!nodes || !nodes.length) {
+                if (!nodes || !nodes.length || !_chartLayer) {
                     return;
                 }
             
-                const g:Graphics = _chartLayer.graphics;
             
-                // Styles
+                // Get styles
                 const lineColor:uint = Helpers.$getStyle(this, "lineColor", DefaultStyles.DEFAULT_LINE_COLOR);
                 const lineColorOver:uint = Helpers.$getStyle(this, "lineColorOver", DefaultStyles.DEFAULT_LINE_COLOR_OVER);
                 const lineColorSelected:uint = Helpers.$getStyle(this, "lineColorSelected", DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
                 const lineColorAnchor:uint = Helpers.$getStyle(this, "lineColorAnchor", DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
                 const thickness:Number = Helpers.$getStyle(this, "lineThickness", DefaultStyles.DEFAULT_LINE_THICKNESS);
-            
+
+                // Prepare for drawing
+                const g:Graphics = _chartLayer.graphics;
+                g.clear();
+                if (_dashGraphics) {
+                    _dashGraphics.clear();
+                }
+                
                 // Draw the invisible, mouse-catch layer.
                 _drawChartLines(g, nodes, thickness * 4, 0, 0.001);
             
@@ -1121,10 +1127,8 @@
              */
             private function _drawChartLines(g:Object, nodes:Vector.<Node>,
                     thickness:Number, strokeColor:uint, alpha:Number = 1):void {
-            
-                g.clear();
-                g.lineStyle(thickness, strokeColor, alpha);
-            
+
+                g.lineStyle(thickness, strokeColor, alpha);            
                 var linerFn:Function = g.lineTo;
             
                 if (g is DashGraphics) {
