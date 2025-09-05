@@ -461,7 +461,7 @@
             styleName="{getStyle('headerStyle')}"/>
 
         <!-- Shown when there is something selected -->
-        <s:Label text="{chartName} ({_numNodes} {(_numNodes === 1)? 'node' : 'nodes'})"
+        <s:Label text="{chartName} ({_numNodes})"
             styleName="{getStyle('bodyStyle')}"
             visible="{_haveSelection}" includeInLayout="{_haveSelection}"/>
 
