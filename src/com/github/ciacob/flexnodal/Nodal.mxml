@@ -522,7 +522,7 @@
                     }
                     chart.editable = _operatingMode !== READONLY && (_activeChart === chart || _operatingMode === NORMAL);
                     chart.visible = (_activeChart === chart) || (operatingMode !== ISOLATED);
-                    chart.filters = (_activeChart === chart && _operatingMode != ISOLATED && ACTIVE_CHART_SHADOW) ?
+                    chart.filters = (_activeChart === chart && ACTIVE_CHART_SHADOW) ?
                         [ACTIVE_CHART_SHADOW] : null;
                 }
             }

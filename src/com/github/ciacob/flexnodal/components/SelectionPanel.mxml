@@ -8,7 +8,8 @@
     gap="{getStyle ('padding') || 0}"
     minHeight="{getStyle('rowHeight') || 0}"
     horizontalAlign="center"
-    verticalAlign="middle">
+    verticalAlign="middle"
+    width="100%">
 
     <fx:Metadata>
         [Event(name="selectionPatch", type="com.github.ciacob.flexnodal.events.NodalEvent")]
@@ -454,16 +455,20 @@
     <!-- CELL: What is selected -->
     <s:HGroup padding="0" verticalAlign="middle"
         minHeight="{getStyle('rowHeight') || 0}"
-        gap="{getStyle('horizontalGap') || 0}">
+        gap="{getStyle('horizontalGap') || 0}"
+        width="100%">
 
         <!-- Chart name and number of selected nodes -->
         <s:Label text="Selection:"
             styleName="{getStyle('headerStyle')}"/>
 
         <!-- Shown when there is something selected -->
-        <s:Label text="{chartName} ({_numNodes})"
+        <s:Label text="{chartName} ({_numNodes} {_haveSingleSelection? 'node' : 'nodes'})"
+            width="100%"
             styleName="{getStyle('bodyStyle')}"
-            visible="{_haveSelection}" includeInLayout="{_haveSelection}"/>
+            visible="{_haveSelection}" includeInLayout="{_haveSelection}"
+            maxDisplayedLines="1"
+            showTruncationTip="true" />
 
         <!-- Shown when there is no selection -->
         <s:Label text="none"
