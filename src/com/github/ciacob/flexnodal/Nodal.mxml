@@ -213,23 +213,29 @@
              *          made active.
              */
             public function set activeChartItem(item:Object):void {
-                if (!item || !_dataProvider || !chartsLayer || !chartsLayer.numElements) {
-                    return;
-                }
             
-                var chart:LineChartLayer = null;
-                for (var i:int = 0; i < chartsLayer.numElements; i++) {
-                    chart = chartsLayer.getElementAt(i) as LineChartLayer;
-                    if (!chart) {
-                        continue;
-                    }
-                    if (chart.dataProvider === item) {
-                        break;
-                    }
-                }
+                // Delay until chart layers stabilize.
+                callLater(function():void {
             
-                _setActiveChart(chart);
-                _setChartsAvailability(_operatingMode);
+                        if (!item || !_dataProvider || !chartsLayer || !chartsLayer.numElements) {
+                            return;
+                        }
+            
+                        var chart:LineChartLayer = null;
+                        for (var i:int = 0; i < chartsLayer.numElements; i++) {
+                            const tmpChart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
+                            if (!tmpChart) {
+                                continue;
+                            }
+                            if (tmpChart.dataProvider === item) {
+                                chart = tmpChart;
+                                break;
+                            }
+                        }
+            
+                        _setActiveChart(chart);
+                        _setChartsAvailability(_operatingMode);
+                    });
             }
             
             /**
