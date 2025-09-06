@@ -124,13 +124,9 @@
              */
             [Bindable]
             public function set dataProvider(value:Object):void {
-
-                // Data provider cannot be `null`.
-                if (_dataProvider !== value && value !== null) {
-                    _dataProvider = value;
-                    _dataProviderChanged = true;
-                    invalidateProperties();
-                }
+                _dataProvider = value;
+                _dataProviderChanged = true;
+                invalidateProperties();
             }
             
             /**
@@ -268,7 +264,8 @@
              */
             public function deleteSelection(dispatch:Boolean = true):void {
             
-                if (!_selectionManager || !_nodes || !_nodes.length || !_markerLayer) {
+                if (!_selectionManager || !_nodes || !_nodes.length ||
+                        !_markerLayer || !_dataProvider) {
                     return;
                 }
             
@@ -318,7 +315,8 @@
              */
             public function patchSelection(patch:Object, dispatch:Boolean = false):void {
                 if (!patch || !patch.selectedNodes || !patch.selectedNodes.length ||
-                        !_selectionManager || !_nodes || !_nodes.length) {
+                        !_selectionManager || !_nodes || !_nodes.length ||
+                        !_dataProvider) {
                     return;
                 }
             
@@ -529,7 +527,8 @@
              * or `null` on failure. Also dispatches a `NODES_CHANGE` NodalEvent (opt-out).
              */
             private function _createNodeAt(x:Number, y:Number, dispatch:Boolean = true):Node {
-                if (!_nodes || !_markerLayer || isNaN(x) || isNaN(y)) {
+                if (!_nodes || !_markerLayer || !_dataProvider ||
+                        isNaN(x) || isNaN(y)) {
                     return null;
                 }
             
@@ -743,7 +742,7 @@
              * via mouse.
              */
             private function _onMarkerHandled(event:MouseEvent):void {
-                if (!event || !event.target) {
+                if (!event || !event.target || !_dataProvider) {
                     return;
                 }
             
@@ -901,7 +900,8 @@
              * Finalizes a node dragging operation.
              */
             private function _onStageMouseUp(event:MouseEvent):void {
-                if (!_nowDragging || !_lastKnownCoords || !_nodes || !_nodes.length) {
+                if (!_nowDragging || !_lastKnownCoords ||
+                        !_nodes || !_nodes.length || !_dataProvider) {
                     return;
                 }
             
@@ -982,10 +982,10 @@
                 const selNodes:Vector.<Node> = _selectionManager.selectedNodes;
                 const numSelNodes:uint = selNodes.length;
                 const numNodes:uint = _nodes.length;
-                
+            
                 // Marker is drawn as a circle with fill, and a half-the-radius thick stroke,
                 // centered on its path.
-                const markerSize : int = _lastKnownCoords.drawnMarkerRadius * 2.5; 
+                const markerSize:int = _lastKnownCoords.drawnMarkerRadius * 2.5;
             
                 var leftDelta:Number = NaN;
                 var topDelta:Number = NaN;
@@ -1087,7 +1087,6 @@
                     return;
                 }
             
-            
                 // Get styles
                 const lineColor:uint = Helpers.$getStyle(this, "lineColor", DefaultStyles.DEFAULT_LINE_COLOR);
                 const lineColorOver:uint = Helpers.$getStyle(this, "lineColorOver", DefaultStyles.DEFAULT_LINE_COLOR_OVER);
@@ -1101,7 +1100,7 @@
                 if (_dashGraphics) {
                     _dashGraphics.clear();
                 }
-                
+            
                 // Draw the invisible, mouse-catch layer.
                 _drawChartLines(g, nodes, thickness * 4, 0, 0.001);
             
@@ -1128,7 +1127,7 @@
             private function _drawChartLines(g:Object, nodes:Vector.<Node>,
                     thickness:Number, strokeColor:uint, alpha:Number = 1):void {
 
-                g.lineStyle(thickness, strokeColor, alpha);            
+                g.lineStyle(thickness, strokeColor, alpha);
                 var linerFn:Function = g.lineTo;
             
                 if (g is DashGraphics) {

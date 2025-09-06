@@ -90,9 +90,9 @@
              */
             [Bindable]
             public function set dataProvider(value:ArrayCollection):void {
-                if (value !== _dataProvider) {
                     if (_dataProvider) {
                         _unwireProvider(_dataProvider);
+                        _activeChart = null;
                     }
             
                     _dataProvider = value;
@@ -102,7 +102,6 @@
             
                     _dataProviderChanged = true;
                     invalidateProperties();
-                }
             }
             
             // -------------------------------
