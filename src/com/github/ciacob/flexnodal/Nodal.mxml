@@ -90,18 +90,19 @@
              */
             [Bindable]
             public function set dataProvider(value:ArrayCollection):void {
-                    if (_dataProvider) {
-                        _unwireProvider(_dataProvider);
-                        _activeChart = null;
-                    }
+                if (_dataProvider) {
+                    _unwireProvider(_dataProvider);
+                    _deactivateChart(_activeChart);
+                    _activeChart = null;
+                }
             
-                    _dataProvider = value;
-                    if (_dataProvider) {
-                        _wireProvider(_dataProvider);
-                    }
+                _dataProvider = value;
+                if (_dataProvider) {
+                    _wireProvider(_dataProvider);
+                }
             
-                    _dataProviderChanged = true;
-                    invalidateProperties();
+                _dataProviderChanged = true;
+                invalidateProperties();
             }
             
             // -------------------------------
@@ -525,17 +526,14 @@
              * subjecting it to external edit actions, such as deleting its selected nodes.
              */
             private function _setActiveChart(chart:LineChartLayer):void {
-            
                 if (!chartsLayer || !chartsLayer.numElements || chart === _activeChart) {
                     return;
                 }
             
-                if (_activeChart) {
-                    _activeChart.clearSelection();
-                    _unwireChart(_activeChart);
-                    _activeChart.alpha = _defaultAlpha;
-                    _activeChart = null;
-                }
+                // Reset the previously active chart, if any.
+                _deactivateChart(_activeChart);
+                _activeChart = null;
+            
                 if (chart) {
                     _activeChart = chart;
                     _wireChart(chart);
@@ -545,6 +543,20 @@
                         chartsLayer.setElementIndex(chart, chartsLayer.numElements - 1);
                     }
                 }
+            }
+            
+            /**
+             * Deactivates given `chart`, removing its event listeners hooks,
+             * removing its selection, and resetting its alpha to a background value.
+             * Actually sending the chart to the background is not handled here.
+             */
+            private function _deactivateChart(chart:LineChartLayer):void {
+                if (!chart) {
+                    return;
+                }
+                chart.clearSelection();
+                _unwireChart(chart);
+                chart.alpha = _defaultAlpha;
             }
             
             /**
