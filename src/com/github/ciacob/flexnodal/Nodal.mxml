@@ -45,6 +45,10 @@
             // Charts display using default alpha unless selected, in which case
             // they display at alpha `1`.
             private var _defaultAlpha:Number = DefaultStyles.DEFAULT_CHART_ALPHA;
+
+            // Flag to raise when the component has been styled externally. Attempts to
+            // check costly styling operations in check.
+            private var _stylesChanged : Boolean = true;
             
             /**
              * Storage for the provider of "drawables", UIComponent instances used
@@ -272,6 +276,17 @@
             }
             
             /**
+             * Overridden to catch later style changes.
+             */
+            override public function styleChanged(styleProp:String):void {
+                super.styleChanged(styleProp);
+                if (styleProp == null || styleProp == "styleName" || styleProp == "chartStyle") {
+                   _stylesChanged = true;
+                   invalidateProperties();
+                }
+            }
+            
+            /**
              * Overridden to update layers as needed.
              */
             override protected function commitProperties():void {
@@ -283,8 +298,7 @@
                     _dataProviderChanged = false;
                     _provisionChartLayers(_dataProvider, chartsLayer);
                     _populateChartLayers(_dataProvider);
-                    _styleChartLayers();
-                    _styleBackgroundLayer();
+                    _stylesChanged = true;
             
                     // Automatically activate the last chart added.
                     const topChart:LineChartLayer = (chartsLayer && chartsLayer.numElements > 0) ?
@@ -294,6 +308,14 @@
                     if (topChart) {
                         dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
                     }
+                    invalidateDisplayList();
+                }
+
+                // Styles
+                if (_stylesChanged) {
+                    _stylesChanged = false;
+                    _styleChartLayers();
+                    _styleBackgroundLayer();
                     invalidateDisplayList();
                 }
             
@@ -502,7 +524,7 @@
                     $s('lineColorSelected', $h(baseColorSelected, hueFactor));
                     $s('lineColorAnchor', $h(baseColorAnchor, hueFactor));
             
-                    chart.alpha = _defaultAlpha;
+                    chart.alpha = (chart === _activeChart)? 1 : _defaultAlpha;
                 }
             }
             
@@ -544,7 +566,7 @@
                     _activeChart = chart;
                     _wireChart(chart);
             
-                    chart.alpha = 1;
+                    chart.alpha = 1; // Shortcut, avoiding costly `_styleChartLayers`.
                     if (chartsLayer.getElementAt(chartsLayer.numElements - 1) !== chart) {
                         chartsLayer.setElementIndex(chart, chartsLayer.numElements - 1);
                     }
