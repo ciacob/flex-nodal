@@ -10,15 +10,19 @@ package com.github.ciacob.flexnodal.events {
         public static const CHART_DATA_CHANGE:String = "chartDataChange";
         public static const CHART_ACTIVATION:String = "chartActivation";
 
-        public var payload:Object;
+        private var _uid:String;
 
-        public function NodalEvent (type:String, payload:Object = null, bubbles:Boolean = false, cancelable:Boolean = false) {
+        public function NodalEvent (type:String, uid:String, bubbles:Boolean = false, cancelable:Boolean = false) {
             super(type, bubbles, cancelable);
-            this.payload = payload;
+            _uid = uid;
+        }
+
+        public function get uid():String {
+            return _uid;
         }
 
         override public function clone():Event {
-            return new NodalEvent (type, payload, bubbles, cancelable);
+            return new NodalEvent (type, uid, bubbles, cancelable);
         }
     }
 }
