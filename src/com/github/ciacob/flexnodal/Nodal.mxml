@@ -9,7 +9,7 @@
     <fx:Metadata>
         [Style(name="chartStyle", type="String", inherit="false")]
         
-        [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.SelectionEvent")]
         [Event(name="chartDataChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
         [Event(name="chartActivation", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
@@ -19,6 +19,7 @@
             import com.github.ciacob.flexnodal.utils.InstanceFactory;
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.events.NodalEvent;
+            import com.github.ciacob.flexnodal.events.SelectionEvent;
             import mx.collections.ArrayCollection;
             import com.github.ciacob.flexnodal.components.LineChartLayer;
             import com.github.ciacob.flexnodal.utils.Helpers;
@@ -29,6 +30,7 @@
             import com.github.ciacob.flexnodal.Nodal;
             import mx.events.CollectionEvent;
             import spark.filters.DropShadowFilter;
+            import com.github.ciacob.flexnodal.utils.SelectionDetails;
             
             /**
              * Overridable, global `DropShadowFilter` instance to be used underneath the active
@@ -244,7 +246,7 @@
             
             /**
              * Unselects all selected nodes of the active chart, if applicable.
-             * Dispatches a `NodalEvent.SELECTION_CHANGE` event.
+             * Dispatches a `SelectionEvent`.
              */
             public function clearSelection():void {
                 if (!_activeChart) {
@@ -268,7 +270,7 @@
              * Rewrites the values of all selected nodes of the active chart, if
              * applicable.
              */
-            public function patchSelection(patch:Object, dispatch:Boolean = false):void {
+            public function patchSelection(patch:SelectionDetails, dispatch:Boolean = false):void {
                 if (!_activeChart || !patch) {
                     return;
                 }
@@ -649,10 +651,10 @@
              * Listener. Executed when the active chart layer dispatched a `selectionChange`
              * event.
              */
-            private function _onSelectionChanged(event:NodalEvent):void {
-            
+            private function _onSelectionChanged(event:SelectionEvent):void {
+
                 // Re-dispatch on current target
-                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_CHANGE, event.payload));
+                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_CHANGE, event.uid, event.details));
             }
             
             /**

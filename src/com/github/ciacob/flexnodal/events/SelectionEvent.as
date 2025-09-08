@@ -16,7 +16,7 @@ package com.github.ciacob.flexnodal.events {
         }
 
         override public function clone():Event {
-            return new SelectionEvent(type, String(payload), _details, bubbles, cancelable);
+            return new SelectionEvent(type, uid, _details, bubbles, cancelable);
         }
     }
 }

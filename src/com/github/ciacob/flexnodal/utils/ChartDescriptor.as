@@ -38,7 +38,7 @@ package com.github.ciacob.flexnodal.utils {
         }
 
         public function get dashStyle():Vector.<Number> {
-            return _dashStyle ? _dashStyle.concat() : null;
+            return (_dashStyle && _dashStyle.length > 0) ? _dashStyle.concat() : null;
         }
     }
 }

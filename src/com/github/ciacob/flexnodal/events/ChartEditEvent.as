@@ -16,7 +16,7 @@ package com.github.ciacob.flexnodal.events {
         }
 
         override public function clone():Event {
-            return new ChartEditEvent (type, String(payload), _edit, bubbles, cancelable);
+            return new ChartEditEvent(type, uid, _edit, bubbles, cancelable);
         }
     }
 }

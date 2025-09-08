@@ -13,8 +13,8 @@
         
         [Style(name="padding", type="Number", inherit="false")]
         
-        [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
-        [Event(name="nodesChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.SelectionEvent")]
+        [Event(name="nodesChange", type="com.github.ciacob.flexnodal.events.ChartEditEvent")]
         [Event(name="layerClick", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
@@ -27,14 +27,18 @@
             import flash.events.MouseEvent;
             import com.github.ciacob.flexnodal.utils.SelectionManager;
             import com.github.ciacob.flexnodal.events.NodalEvent;
+            import com.github.ciacob.flexnodal.events.SelectionEvent;
+            import com.github.ciacob.flexnodal.events.ChartEditEvent;
             import com.github.ciacob.flexnodal.utils.Helpers;
-            import com.github.ciacob.flexnodal.utils.Node;
+            import com.github.ciacob.flexnodal.utils.ChartDescriptor;
             import com.github.ciacob.flexnodal.utils.ChartCoordinates;
             import com.github.ciacob.flexnodal.utils.DragDeltas;
             import flash.geom.Rectangle;
             import flash.geom.Point;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
             import com.github.ciacob.flexnodal.utils.DashGraphics;
+            import com.github.ciacob.flexnodal.utils.SelectionDetails;
+            import com.github.ciacob.flexnodal.utils.ChartEdit;
             
             // Storage for the alternate graphics engine we use for drawing
             // dashed lines instead of solid lines.
@@ -97,21 +101,9 @@
             // The `dataProvider` property
             // ---------------------------
             
-            // An Object, containing at the very least a `values` Array
-            // property, preferably also containing a `name` and `colorIndex`.
-            
-            // The `values` property is expected to hold all logical [x,y]
-            // points that define this line chart.
-            // 
-            // More specifically, `values` should be an Array of user-provided
-            // doublets of abstract and normalized [x,y] values, such as:
-            // [ [0,0], [0.5,1], [1,0] ]
-            // 
-            // The above abstractly define a simple chart line
-            // that starts and ends at the very bottom on the Y axis,
-            // while climbing fully in its middle (on the X axis),
-            // thus creating a simple "hill" profile.
-            private var _dataProvider:Object;
+            // Immutable descriptor for this chart, providing an identifier,
+            // a friendly name and the list of logical points defining the chart.
+            private var _dataProvider:ChartDescriptor;
             
             // Flag to raise when the client code has externally changed
             // the input data provider.
@@ -121,7 +113,7 @@
              * Sets a new data provider. Causes the chart to be updated.
              */
             [Bindable]
-            public function set dataProvider(value:Object):void {
+            public function set dataProvider(value:ChartDescriptor):void {
                 _dataProvider = value;
                 _dataProviderChanged = true;
                 invalidateProperties();
@@ -131,7 +123,7 @@
              * Gets the current data provider. Its `values` will reflect
              * any changes the user has made to the chart meanwhile.
              */
-            public function get dataProvider():Object {
+            public function get dataProvider():ChartDescriptor {
                 return _dataProvider;
             }
             
@@ -194,7 +186,7 @@
              * Returns `null` otherwise.
              */
             public function get dashStyle():Vector.<Number> {
-                return _dashStyle? _dashStyle.concat() : null;
+                return (_dashStyle && _dashStyle.length > 0) ? _dashStyle.concat() : null;
             }
             
             // ----------------------
@@ -300,7 +292,6 @@
                     _nodes = _proofNodes(_nodes);
                     _provisionMarkers(_nodes, _markerLayer);
                     invalidateDisplayList();
-                    _dataProvider.values = _exportNodes(_nodes);
                     if (dispatch) {
                         _broadcastNodesChange();
                     }
@@ -311,32 +302,30 @@
              * Rewrites the values of all selected nodes, optionally also dispatching
              * a `NODES_CHANGE` and a `SELECTION_CHANGE` NodalEvents.
              */
-            public function patchSelection(patch:Object, dispatch:Boolean = false):void {
-                if (!patch || !patch.selectedNodes || !patch.selectedNodes.length ||
+            public function patchSelection(patch:SelectionDetails, dispatch:Boolean = false):void {
+                if (!patch || !patch.selectedValues || !patch.selectedValues.length ||
                         !_selectionManager || !_nodes || !_nodes.length ||
                         !_dataProvider) {
                     return;
                 }
-            
+
                 const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes;
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
                 }
-            
-                if (selectedNodes.length != selectedNodes.length) {
+
+                if (selectedNodes.length != patch.selectedValues.length) {
                     return;
                 }
-            
+
                 _dragBoundsChanged = true;
-                const patchedNodes:Array = patch.selectedNodes;
+                const patchedNodes:Vector.<Point> = patch.selectedValues;
                 for (var i:int = 0; i < patchedNodes.length; i++) {
-                    const p:Array = patchedNodes[i];
-                    const pValue:Number = p[1];
-                    selectedNodes[i].logicalY = pValue;
+                    const p:Point = patchedNodes[i];
+                    selectedNodes[i].logicalY = p.y;
                 }
-            
+
                 invalidateDisplayList();
-                _dataProvider.values = _exportNodes(_nodes);
                 if (dispatch) {
                     _broadcastNodesChange();
                     _broadcastSelection();
@@ -566,7 +555,6 @@
                 invalidateDisplayList();
             
                 // Broadcast the changes.
-                _dataProvider.values = _exportNodes(_nodes);
                 if (dispatch) {
                     _broadcastNodesChange();
                 }
@@ -575,45 +563,41 @@
             }
             
             /**
-             * Converts a single Node to an [x,y] doublet. Returns null for a missing Node.
+             * Converts a single Node to a Point. Returns null for a missing Node.
              */
-            private function _exportNode(node:Node):Array {
-                if (!node) {
-                    return null;
-                }
-                return [node.logicalX, node.logicalY];
+            private function _nodeToPoint(node:Node):Point {
+                return node ? new Point(node.logicalX, node.logicalY) : null;
             }
-            
+
             /**
-             * Converts several nodes to [x,y] doublets and appends them to storage.
-             * Does nothing if missing `nodes` or `storage`.
+             * Converts several nodes to Points and appends them to storage.
+             * Synthetic nodes are ignored.
              */
-            private function _exportNodes(nodes:Vector.<Node>):Array {
-                const out:Array = [];
+            private function _nodesToPoints(nodes:Vector.<Node>):Vector.<Point> {
+                var out:Vector.<Point> = new <Point>[];
                 if (!nodes || !nodes.length) {
                     return out;
                 }
                 for each (var node:Node in nodes) {
-                    // We do not export synthetic nodes.
                     if (node.isSynthetic) {
                         continue;
                     }
-                    out.push(_exportNode(node));
+                    out.push(_nodeToPoint(node));
                 }
                 return out;
             }
-            
+
             /**
              * Parses incoming values into nodes.
              */
-            private function _importValues(values:Array):Vector.<Node> {
+            private function _importValues(values:Vector.<Point>):Vector.<Node> {
                 var nodes:Vector.<Node> = new <Node>[];
-            
+
                 const numValues:uint = values ? values.length : 0;
                 for (var i:int = 0; i < numValues; i++) {
-                    nodes.push(new Node(values[i][0], values[i][1], false));
+                    nodes.push(new Node(values[i].x, values[i].y, false));
                 }
-            
+
                 nodes = _proofNodes(nodes);
                 return nodes;
             }
@@ -779,7 +763,6 @@
                                 _dragBoundsChanged = true;
                             }
                             invalidateDisplayList();
-                            _dataProvider.values = _exportNodes(_nodes);
                         }
                         break;
             
@@ -932,7 +915,6 @@
                     node.logicalY = Math.max(0, Math.min(1, ly));
                 }
             
-                _dataProvider.values = _exportNodes(_nodes);
                 _broadcastNodesChange();
             
                 // Rebroadcast selection, as selected values might have changed despite
@@ -950,18 +932,24 @@
              * Sends out information about the current chart selection.
              */
             private function _broadcastSelection():void {
-                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_CHANGE, {
-                                selectedNodes: _exportNodes(_selectionManager.selectedNodes),
-                                selectedNode: _exportNode(_selectionManager.selectedNode),
-                                anchorNode: _exportNode(_selectionManager.anchorNode)
-                            }));
+                var details:SelectionDetails = new SelectionDetails(
+                    _nodeToPoint(_selectionManager.selectedNode),
+                    _nodesToPoints(_selectionManager.selectedNodes),
+                    _nodeToPoint(_selectionManager.anchorNode)
+                );
+                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_CHANGE,
+                    _dataProvider ? _dataProvider.uid : null, details));
             }
-            
+
             /**
              * Sends out information about the changed nodes.
              */
             private function _broadcastNodesChange():void {
-                dispatchEvent(new NodalEvent(NodalEvent.NODES_CHANGE));
+                if (!_dataProvider) {
+                    return;
+                }
+                var edit:ChartEdit = new ChartEdit(_dataProvider.uid, _nodesToPoints(_nodes), _chartName);
+                dispatchEvent(new ChartEditEvent(NodalEvent.NODES_CHANGE, _dataProvider.uid, edit));
             }
             
             /**
