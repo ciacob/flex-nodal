@@ -365,8 +365,9 @@ package com.github.ciacob.flexnodal.utils {
             var min:Number = Number.MAX_VALUE;
             var max:Number = -Number.MAX_VALUE;
 
-            for each (var node:Point in nodes) {
-                var y:Number = node.y;
+            const len:int = nodes.length;
+            for (var i:int = 0; i < len; i++) {
+                const y:Number = nodes[i].y;
                 if (y < min) {
                     min = y;
                 }
@@ -376,7 +377,7 @@ package com.github.ciacob.flexnodal.utils {
                 sum += y;
             }
 
-            var avg:Number = sum / nodes.length;
+            var avg:Number = sum / len;
             return {min: min, max: max, avg: avg};
         }
 
