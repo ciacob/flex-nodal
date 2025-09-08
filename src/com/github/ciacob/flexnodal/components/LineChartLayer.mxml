@@ -31,11 +31,9 @@
             import com.github.ciacob.flexnodal.utils.Node;
             import com.github.ciacob.flexnodal.utils.ChartCoordinates;
             import com.github.ciacob.flexnodal.utils.DragDeltas;
-            import flash.events.MouseEvent;
             import flash.geom.Rectangle;
             import flash.geom.Point;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
-            import flash.events.MouseEvent;
             import com.github.ciacob.flexnodal.utils.DashGraphics;
             
             // Storage for the alternate graphics engine we use for drawing
@@ -196,7 +194,7 @@
              * Returns `null` otherwise.
              */
             public function get dashStyle():Vector.<Number> {
-                return _dashStyle.concat();
+                return _dashStyle? _dashStyle.concat() : null;
             }
             
             // ----------------------
