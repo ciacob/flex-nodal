@@ -10,7 +10,7 @@
         [Style(name="chartStyle", type="String", inherit="false")]
         
         [Event(name="selectionChange", type="com.github.ciacob.flexnodal.events.SelectionEvent")]
-        [Event(name="chartDataChange", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="nodesChange", type="com.github.ciacob.flexnodal.events.ChartEditEvent")]
         [Event(name="chartActivation", type="com.github.ciacob.flexnodal.events.NodalEvent")]
     </fx:Metadata>
 
@@ -20,15 +20,17 @@
             import mx.core.UIComponent;
             import com.github.ciacob.flexnodal.events.NodalEvent;
             import com.github.ciacob.flexnodal.events.SelectionEvent;
+            import com.github.ciacob.flexnodal.events.ChartEditEvent;
             import mx.collections.ArrayCollection;
             import com.github.ciacob.flexnodal.components.LineChartLayer;
+            import com.github.ciacob.flexnodal.utils.ChartDescriptor;
+            import com.github.ciacob.flexnodal.utils.ChartEdit;
             import com.github.ciacob.flexnodal.utils.Helpers;
             import com.github.ciacob.flexnodal.utils.DefaultStyles;
             import spark.components.Group;
             import mx.styles.CSSStyleDeclaration;
             import mx.styles.IStyleManager2;
             import com.github.ciacob.flexnodal.Nodal;
-            import mx.events.CollectionEvent;
             import spark.filters.DropShadowFilter;
             import com.github.ciacob.flexnodal.utils.SelectionDetails;
             
@@ -76,7 +78,7 @@
             // ---------------------------
             
             // Storage for the `dataProvider` property.
-            private var _dataProvider:ArrayCollection;
+            private var _dataProvider:Vector.<ChartDescriptor>;
             
             // Flag to raise when the `dataProvider` property has been
             // externally changed.
@@ -87,28 +89,23 @@
              * The data provider defines the chart lines to display and
              * edit.
              */
-            public function get dataProvider():ArrayCollection {
+            public function get dataProvider():Vector.<ChartDescriptor> {
                 return _dataProvider;
             }
-            
+
             /**
              * Sets or replaces the data provider of this component.
              */
             [Bindable]
-            public function set dataProvider(value:ArrayCollection):void {
-                if (_dataProvider) {
-                    _unwireProvider(_dataProvider);
+            public function set dataProvider(value:Vector.<ChartDescriptor>):void {
+                if (value !== _dataProvider) {
                     _deactivateChart(_activeChart);
                     _activeChart = null;
+
+                    _dataProvider = value;
+                    _dataProviderChanged = true;
+                    invalidateProperties();
                 }
-            
-                _dataProvider = value;
-                if (_dataProvider) {
-                    _wireProvider(_dataProvider);
-                }
-            
-                _dataProviderChanged = true;
-                invalidateProperties();
             }
             
             // -------------------------------
@@ -257,7 +254,7 @@
             
             /**
              * Deletes all selected nodes of the active chart, if applicable.
-             * Dispatches a `Nodal.CHART_DATA_CHANGE` event.
+             * Dispatches a `ChartEditEvent`.
              */
             public function deleteSelection():void {
                 if (!_activeChart) {
@@ -386,7 +383,7 @@
              * Ensures the `chartLayers` container contains the correct number of
              * charts.
              */
-            private function _provisionChartLayers(dataProvider:ArrayCollection, container:Group):void {
+            private function _provisionChartLayers(dataProvider:Vector.<ChartDescriptor>, container:Group):void {
                 if (!_chartsFactory || !container) {
                     return;
                 }
@@ -413,15 +410,15 @@
              * Respectively distributes the chart values available in the data provider
              * to the available charts.
              */
-            private function _populateChartLayers(_dataProvider:ArrayCollection):void {
-                if (!_dataProvider || !_dataProvider.length || !chartsLayer) {
+            private function _populateChartLayers(dataProvider:Vector.<ChartDescriptor>):void {
+                if (!dataProvider || !dataProvider.length || !chartsLayer) {
                     return;
                 }
-            
-                for (var i:int = 0; i < _dataProvider.length; i++) {
+
+                for (var i:int = 0; i < dataProvider.length; i++) {
                     const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (chart) {
-                        chart.dataProvider = _dataProvider[i];
+                        chart.dataProvider = dataProvider[i];
                     }
                 }
             }
@@ -512,7 +509,7 @@
                         continue;
                     }
             
-                    const chartDp:Object = _dataProvider.getItemAt(i);
+                    const chartDp:ChartDescriptor = _dataProvider[i];
                     if (!chartDp) {
                         continue;
                     }
@@ -590,20 +587,6 @@
             }
             
             /**
-             * Removes any event listeners from given provider.
-             */
-            private function _unwireProvider(provider:ArrayCollection):void {
-                provider.removeEventListener(CollectionEvent.COLLECTION_CHANGE, _onDpAltered);
-            }
-            
-            /**
-             * Adds needed event listeners to given provider.
-             */
-            private function _wireProvider(provider:ArrayCollection):void {
-                provider.addEventListener(CollectionEvent.COLLECTION_CHANGE, _onDpAltered);
-            }
-            
-            /**
              * Removes any event listeners from given chart.
              */
             private function _unwireChart(chart:LineChartLayer):void {
@@ -637,53 +620,34 @@
             }
             
             /**
-             * Listener. Executed when the current data provider is "changed in place" without
-             * being replaced, i.e., an item is added or removed.
-             */
-            private function _onDpAltered(event:CollectionEvent):void {
-                _dataProviderChanged = true;
-                invalidateProperties();
-            
-                // To consider: only build/destroy affected items, without rebuilding everything.
-            }
-            
-            /**
              * Listener. Executed when the active chart layer dispatched a `selectionChange`
              * event.
              */
             private function _onSelectionChanged(event:SelectionEvent):void {
-
-                // Re-dispatch on current target
-                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_CHANGE, event.uid, event.details));
+                dispatchEvent(event);
             }
-            
+
             /**
              * Listener. Executed when the active chart layer dispatches a `nodesChange`
              * event.
              */
-            private function _onNodesChanged(event:NodalEvent):void {
-                if (!_dataProvider || !chartsLayer || !chartsLayer.numElements) {
+            private function _onNodesChanged(event:ChartEditEvent):void {
+                if (!_dataProvider) {
                     return;
                 }
-                const chart:LineChartLayer = event.target as LineChartLayer;
-                if (!chart) {
-                    return;
+
+                var editUid:String = event.uid;
+                for (var i:int = 0; i < _dataProvider.length; i++) {
+                    var descriptor:ChartDescriptor = _dataProvider[i];
+                    if (descriptor && descriptor.uid === editUid) {
+                        var edit:ChartEdit = event.edit;
+                        var updated:ChartDescriptor = new ChartDescriptor(editUid, edit.values, edit.name, descriptor.hueFactor, descriptor.dashStyle);
+                        _dataProvider[i] = updated;
+                        break;
+                    }
                 }
-            
-                const chartDp:Object = chart.dataProvider;
-                if (!chartDp) {
-                    return;
-                }
-            
-                const chartIdx:int = _dataProvider.getItemIndex(chartDp);
-                if (chartIdx === -1) {
-                    return;
-                }
-            
-                dispatchEvent(new NodalEvent(NodalEvent.CHART_DATA_CHANGE, {
-                                changedIndex: chartIdx,
-                                changedData: chartDp
-                            }));
+
+                dispatchEvent(event);
             }
             
             /**
