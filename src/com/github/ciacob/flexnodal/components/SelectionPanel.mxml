@@ -12,7 +12,7 @@
     width="100%">
 
     <fx:Metadata>
-        [Event(name="selectionPatch", type="com.github.ciacob.flexnodal.events.NodalEvent")]
+        [Event(name="selectionPatch", type="com.github.ciacob.flexnodal.events.SelectionEvent")]
         
         [Style(name="headerStyle", type="String", inherit="false")]
         [Style(name="bodyStyle", type="String", inherit="false")]
@@ -22,8 +22,11 @@
     <fx:Script>
         <![CDATA[
             import spark.components.NumericStepper;
+            import com.github.ciacob.flexnodal.events.SelectionEvent;
             import com.github.ciacob.flexnodal.events.NodalEvent;
             import com.github.ciacob.flexnodal.utils.Helpers;
+            import com.github.ciacob.flexnodal.utils.SelectionDetails;
+            import flash.geom.Point;
             
             // The name of the current chart; displayed at the top of the panel.
             [Bindable]
@@ -113,7 +116,7 @@
             // ---------------------------
             
             // Internal storage for the `dataProvider` property
-            private var _dataProvider:Object;
+            private var _dataProvider:SelectionDetails;
             
             // Flag we raise when the `dataProvider` property has been externally changed
             private var _dataProviderChanged:Boolean;
@@ -122,40 +125,18 @@
              * Returns the current data provider of this component. Reflects internal
              * changes.
              */
-            public function get dataProvider():Object {
+            public function get dataProvider():SelectionDetails {
                 return _dataProvider;
             }
             
             /**
              * Sets or replaces a data provider for this component.
              * @param   value
-             *          A user provided dataset to be used as data provider.
-             *          Must pass validation in order to be accepted. Example of
-             *          valid datasets:
-             *
-             *          Single selection:
-             *          {
-             *              "selectedNode":[0.5,0.8],
-             *              "anchorNode":[0.5,0.8],
-             *              "selectedNodes":[[0.5,0.8]]
-             *          }
-             *
-             *          Multiple selection:
-             *          {
-             *              "selectedNode":[1,0],
-             *              "anchorNode":[1,0],
-             *              "selectedNodes":[[0.5,0.8],[0.95,0],[1,0]]
-             *          }
-             *
-             *          If a provided dataset does not pass validation, `null` is
-             *          assumed instead.
-             *
-             *          N.B.: The component operates destructively on the provided
-             *          dataset rather than on a detached copy. This is by design.
+             *          Immutable selection details describing the current context.
              */
-            public function set dataProvider(value:Object):void {
+            public function set dataProvider(value:SelectionDetails):void {
                 if (value !== _dataProvider) {
-                    _dataProvider = _validateDataProvider(value) ? value : null;
+                    _dataProvider = value;
                     _dataProviderChanged = true;
                     invalidateProperties();
                 }
@@ -184,23 +165,23 @@
                     _dataProviderChanged = false;
                     _clearCache();
                     if (_dataProvider) {
-                        _numNodes = _dataProvider.selectedNodes.length;
+                        _numNodes = _dataProvider.selectedValues.length;
                         if (_numNodes) {
-            
+
                             // Common to single and multiple selection scenarios
-                            const selectedNode:Array = _dataProvider.selectedNode;
-                            _currValue = Helpers.toPercent(selectedNode[1]);
+                            const selectedNode:Point = _dataProvider.selectedValue;
+                            _currValue = Helpers.toPercent(selectedNode.y);
                             _currNodeTime = (Helpers.timeToLabel !== null) ?
-                                Helpers.timeToLabel(selectedNode[0]) : "";
-            
+                                Helpers.timeToLabel(selectedNode.x) : "";
+
                             // Multiple selection scenario
                             if (_numNodes > 1) {
-                                const stats:Object = Helpers.analyzeY(_dataProvider.selectedNodes);
+                                const stats:Object = Helpers.analyzeY(_dataProvider.selectedValues);
                                 _minRangeValue = Helpers.toPercent(stats.min);
                                 _maxRangeValue = Helpers.toPercent(stats.max);
                                 _avgRangeValue = Helpers.toPercent(stats.avg);
-            
-                                const hash:String = _hashSelectionContext(chartName, _dataProvider.selectedNodes);
+
+                                const hash:String = _hashSelectionContext(chartName, _dataProvider.selectedValues);
                                 if (hash !== _selectionHash) {
                                     _selectionHash = hash;
                                     _offsetMin = Helpers.toPercent(-stats.min);
@@ -220,10 +201,10 @@
              * based on given `chartName` and `selectedNodes`. Relies on the fact that
              * selected nodes maintain their indices and "y" values when patched.
              */
-            private function _hashSelectionContext(chartName:String, selectedNodes:Array):String {
+            private function _hashSelectionContext(chartName:String, selectedNodes:Vector.<Point>):String {
                 const tokens:Array = [chartName || ""];
                 for (var i:int = 0; i < selectedNodes.length; i++) {
-                    tokens.push(i + '-' + selectedNodes[i][0]);
+                    tokens.push(i + '-' + selectedNodes[i].x);
                 }
                 return tokens.join(',');
             }
@@ -255,136 +236,34 @@
             }
             
             /**
-             * Formally validates the received `dataProvider`. Expected format is, e.g.:
-             * {
-             *      "selectedNode":[1,0],
-             *      "anchorNode":[1,0],
-             *      "selectedNodes":[[0,0.1],[0.5,0.8],[0.95,0],[1,0]]
-             * }
+             * Creates a new SelectionDetails instance by applying `value` (or an offset)
+             * to all Y coordinates found in the provided selection.
              */
-            private function _validateDataProvider(dataProvider:Object):Boolean {
-                if (!dataProvider) {
-                    return false;
-                }
-                const expectedProps:Array = ['selectedNode', 'anchorNode', 'selectedNodes'];
-                for each (var propName:String in expectedProps) {
-                    if (!dataProvider.hasOwnProperty(propName)) {
-                        return false;
-                    }
-                    if (!(dataProvider[propName] is Array)) {
-                        return false;
-                    }
-                    if ((dataProvider[propName] as Array).length === 0) {
-                        return false;
-                    }
-            
-                    const validatorFn:Function = (propName === 'selectedNodes') ?
-                        _validateDoublets : _validateDoublet;
-                    if (!validatorFn(dataProvider[propName] as Array)) {
-                        return false;
-                    }
-                }
-            
-                return true;
-            }
-            
-            /**
-             * Validates the given `doublets` Array as an Array of legitimate doublets.
-             *
-             * @param   doublets
-             *          Assumed non-null Array to validate.
-             */
-            private function _validateDoublets(doublets:Array):Boolean {
-                for (var i:int = 0; i < doublets.length; i++) {
-                    if (!_validateDoublet(doublets[i])) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            
-            /**
-             * Validates the given `doublet` as an Array of exactly two valid
-             * numeric values.
-             *
-             * @param   doublet
-             *          Assumed non-null Array to validate.
-             */
-            private function _validateDoublet(doublet:Array):Boolean {
-                return (doublet.length === 2 &&
-                        !isNaN(doublet[0]) && !isNaN(doublet[1]));
-            }
-            
-            /**
-             * Sets given `value` in all doublets found inside the given `dp`.
-             * @param   dp
-             *          Either `null` or a previously validated data provider.
-             *
-             * @param   value
-             *          Either `NaN` or a previously validated Number.
-             *
-             * @param   value
-             *          Whether given `value` should be treated as absolute or an offset.
-             */
-            private function _patchDataProvider(dp:Object, value:Number, offsetMode:Boolean = false):void {
+            private function _patchDataProvider(dp:SelectionDetails, value:Number, offsetMode:Boolean = false):SelectionDetails {
                 if (!dp || isNaN(value)) {
-                    return;
+                    return dp;
                 }
-            
-                for (var propName:String in dp) {
-                    const dataset:Array = dp[propName] as Array;
-                    const patcherFn:Function = (propName === 'selectedNodes') ?
-                        _patchDoublets : _patchDoublet;
-                    patcherFn(dataset, value, offsetMode);
+
+                var patchedValues:Vector.<Point> = new <Point>[];
+                for each (var p:Point in dp.selectedValues) {
+                    patchedValues.push(_patchPoint(p, value, offsetMode));
                 }
-            
+
+                var selectedValue:Point = _patchPoint(dp.selectedValue, value, offsetMode);
+                var anchor:Point = _patchPoint(dp.selectionAnchor, value, offsetMode);
+
                 _dataProviderChanged = true;
                 invalidateProperties();
+                return new SelectionDetails(selectedValue, patchedValues, anchor);
             }
-            
-            /**
-             * Patches the given `doublets` Array by replacing the second item of
-             * each `doublet` with given `value`.
-             *
-             * @param   doublet
-             *          Assumed non-null and validated doublets Array to patch.
-             *
-             * @param   value
-             *          Assumed valid Number to use.
-             *
-             * @param   offsetMode
-             *          optional. If `true`, treats received `value` as an offset.
-             */
-            private function _patchDoublets(doublets:Array, value:Number, offsetMode:Boolean = false):void {
-                for (var i:int = 0; i < doublets.length; i++) {
-                    _patchDoublet(doublets[i], value, offsetMode);
+
+            private function _patchPoint(src:Point, value:Number, offsetMode:Boolean = false):Point {
+                if (!src) {
+                    return null;
                 }
-            }
-            
-            /**
-             * Patches the given `doublet` by replacing its second item with
-             * given `value`.
-             *
-             * @param   doublet
-             *          Assumed non-null and validated doublet Array to patch.
-             *
-             * @param   newValue
-             *          Assumed valid Number to use.
-             *
-             * @param   offsetMode
-             *          optional. If `true`, treats received `value` as an offset.
-             */
-            private function _patchDoublet(doublet:Array, newValue:Number, offsetMode:Boolean = false):void {
-                var value:Number = doublet[1];
-                if (offsetMode) {
-                    value += newValue;
-                }
-                else {
-                    value = newValue;
-                }
-            
-                value = Math.max(0, Math.min(1, value));
-                doublet[1] = value;
+                var y:Number = offsetMode ? src.y + value : value;
+                y = Math.max(0, Math.min(1, y));
+                return new Point(src.x, y);
             }
             
             /**
@@ -400,8 +279,8 @@
                 }
             
                 const value:Number = Helpers.fromPercent(percent);
-                _patchDataProvider(_dataProvider, value);
-                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_PATCH, _dataProvider));
+                _dataProvider = _patchDataProvider(_dataProvider, value);
+                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_PATCH, chartName, _dataProvider));
             }
             
             /**
@@ -425,13 +304,14 @@
             
                 // Calculate the delta/displacement relative to the last
                 // known value.
+                var deltaValue:Number = value;
                 if (offsetMode) {
-                    const deltaValue:Number = (value - _currOffset);
+                    deltaValue = (value - _currOffset);
                     _currOffset = value;
                 }
-            
-                _patchDataProvider(_dataProvider, offsetMode ? deltaValue : value, offsetMode);
-                dispatchEvent(new NodalEvent(NodalEvent.SELECTION_PATCH, _dataProvider));
+
+                _dataProvider = _patchDataProvider(_dataProvider, offsetMode ? deltaValue : value, offsetMode);
+                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_PATCH, chartName, _dataProvider));
             }
             
             /**

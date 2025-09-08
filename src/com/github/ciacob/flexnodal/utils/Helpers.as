@@ -2,6 +2,7 @@ package com.github.ciacob.flexnodal.utils {
 
     import mx.core.UIComponent;
     import mx.styles.CSSStyleDeclaration;
+    import flash.geom.Point;
 
     /**
      * Holder for various (potentially) generic helper functions.
@@ -354,18 +355,18 @@ package com.github.ciacob.flexnodal.utils {
          * minimum, maximum and average values.
          *
          * @param   `nodes`
-         *           Assumed valid, non-empty Array of valid doublets.
+         *           Assumed valid, non-empty Vector of Points.
          *
          * @return  An Object similar to:
          *          {min: 0, max: 0.5, avg: 1}
          */
-        public static function analyzeY(nodes:Array):Object {
+        public static function analyzeY(nodes:Vector.<Point>):Object {
             var sum:Number = 0;
             var min:Number = Number.MAX_VALUE;
             var max:Number = -Number.MAX_VALUE;
 
-            for each (var node:Array in nodes) {
-                var y:Number = node[1];
+            for each (var node:Point in nodes) {
+                var y:Number = node.y;
                 if (y < min) {
                     min = y;
                 }
