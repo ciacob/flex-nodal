@@ -25,7 +25,7 @@ git clone https://github.com/ciacob/flex-nodal.git
 
 ### Running the demo
 *An integration demo lives in a separate repository.*
-[flex-nodal-tester](https://github.com/ciacob/flex-nodal-tester) provides sample data and a ready-to-run application.
+The [flex-nodal-tester](https://github.com/ciacob/flex-nodal-tester) repository provides sample data and a ready-to-run application.
 
 ## Architecture
 *Modular components cooperate through events and shared utilities.*
@@ -38,7 +38,7 @@ git clone https://github.com/ciacob/flex-nodal.git
 ## Development
 *Contributions are welcome through pull requests.*
 - Follow Flex coding conventions.
-- Tests and demos reside in `flex-nodal-tester` and should accompany significant changes.
+- Tests and demos reside in [`flex-nodal-tester`](https://github.com/ciacob/flex-nodal-tester) and should accompany significant changes.
 
 ## License
 Licensed under the [MIT](https://github.com/ciacob/flex-nodal/blob/master/LICENSE) license terms.
