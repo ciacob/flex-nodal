@@ -1,6 +1,7 @@
 package com.github.ciacob.flexnodal.utils {
 
     import mx.core.UIComponent;
+    import mx.styles.CSSStyleDeclaration;
 
     /**
      * Holder for various (potentially) generic helper functions.
@@ -61,12 +62,15 @@ package com.github.ciacob.flexnodal.utils {
         /**
          * Helper, reads a CSS style with a fallback value.
          *
-         * @param host - Host to invoke `getStyle` on.
+         * <p>Accepts either a <code>UIComponent</code> or a
+         * <code>CSSStyleDeclaration</code> as <code>host</code>.</p>
+         *
+         * @param host - UIComponent or CSSStyleDeclaration to invoke `getStyle` on.
          * @param name - Name of the style to read.
          * @param fallback - Default value to assume if no style can be retrieved for given name.
          */
         public static function $getStyle(host:*, name:String, fallback:*):* {
-            if (!host || !(host.getStyle is Function)) {
+            if (!host || !(host is UIComponent || host is CSSStyleDeclaration)) {
                 return fallback;
             }
 
