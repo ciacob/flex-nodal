@@ -49,10 +49,10 @@
             // Charts display using default alpha unless selected, in which case
             // they display at alpha `1`.
             private var _defaultAlpha:Number = DefaultStyles.DEFAULT_CHART_ALPHA;
-
+            
             // Flag to raise when the component has been styled externally. Attempts to
             // check costly styling operations in check.
-            private var _stylesChanged : Boolean = true;
+            private var _stylesChanged:Boolean = true;
             
             /**
              * Storage for the provider of "drawables", UIComponent instances used
@@ -92,7 +92,7 @@
             public function get dataProvider():Vector.<ChartDescriptor> {
                 return _dataProvider;
             }
-
+            
             /**
              * Sets or replaces the data provider of this component.
              */
@@ -101,7 +101,7 @@
                 if (value !== _dataProvider) {
                     _deactivateChart(_activeChart);
                     _activeChart = null;
-
+            
                     _dataProvider = value;
                     _dataProviderChanged = true;
                     invalidateProperties();
@@ -280,8 +280,8 @@
             override public function styleChanged(styleProp:String):void {
                 super.styleChanged(styleProp);
                 if (styleProp == null || styleProp == "styleName" || styleProp == "chartStyle") {
-                   _stylesChanged = true;
-                   invalidateProperties();
+                    _stylesChanged = true;
+                    invalidateProperties();
                 }
             }
             
@@ -305,11 +305,12 @@
                     _setActiveChart(topChart);
                     _setChartsAvailability(_operatingMode);
                     if (topChart) {
-                        dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, topChart.dataProvider));
+                        dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION,
+                                    topChart.dataProvider.uid));
                     }
                     invalidateDisplayList();
                 }
-
+            
                 // Styles
                 if (_stylesChanged) {
                     _stylesChanged = false;
@@ -414,7 +415,7 @@
                 if (!dataProvider || !dataProvider.length || !chartsLayer) {
                     return;
                 }
-
+            
                 for (var i:int = 0; i < dataProvider.length; i++) {
                     const chart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
                     if (chart) {
@@ -523,7 +524,7 @@
                     $s('lineColorSelected', $h(baseColorSelected, hueFactor));
                     $s('lineColorAnchor', $h(baseColorAnchor, hueFactor));
             
-                    chart.alpha = (chart === _activeChart)? 1 : _defaultAlpha;
+                    chart.alpha = (chart === _activeChart) ? 1 : _defaultAlpha;
                 }
             }
             
@@ -626,7 +627,7 @@
             private function _onSelectionChanged(event:SelectionEvent):void {
                 dispatchEvent(event);
             }
-
+            
             /**
              * Listener. Executed when the active chart layer dispatches a `nodesChange`
              * event.
@@ -635,7 +636,7 @@
                 if (!_dataProvider) {
                     return;
                 }
-
+            
                 var editUid:String = event.uid;
                 for (var i:int = 0; i < _dataProvider.length; i++) {
                     var descriptor:ChartDescriptor = _dataProvider[i];
@@ -646,7 +647,7 @@
                         break;
                     }
                 }
-
+            
                 dispatchEvent(event);
             }
             
@@ -665,7 +666,8 @@
                 }
                 _setActiveChart(chart);
                 _setChartsAvailability(_operatingMode);
-                dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION, chart.dataProvider));
+                dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION,
+                            chart.dataProvider.uid));
             }
         ]]>
     </fx:Script>
