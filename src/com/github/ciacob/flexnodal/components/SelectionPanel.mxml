@@ -28,10 +28,6 @@
             import com.github.ciacob.flexnodal.utils.SelectionDetails;
             import flash.geom.Point;
             
-            // The name of the current chart; displayed at the top of the panel.
-            [Bindable]
-            public var chartName:String;
-            
             // Text and/or icon to display inside the "Floor" action button.
             [Bindable]
             public var floorBtnContent:Object = 'Floor';
@@ -81,6 +77,10 @@
             // Storage for the current number of selected nodes.
             [Bindable]
             private var _numNodes:int;
+            
+            // Storage for the chart name from the data provider.
+            [Bindable]
+            private var _chartName:String;
             
             // Storage for the value of the currently selected node (single selection scenario).
             [Bindable]
@@ -172,6 +172,7 @@
                     _dataProviderChanged = false;
                     _clearCache();
                     if (_dataProvider) {
+                        _chartName = _dataProvider.chartName;
                         _numNodes = _dataProvider.selectedValues.length;
                         if (_numNodes) {
 
@@ -188,7 +189,7 @@
                                 _maxRangeValue = Helpers.toPercent(stats.max);
                                 _avgRangeValue = Helpers.toPercent(stats.avg);
 
-                                const hash:String = _hashSelectionContext(chartName, _dataProvider.selectedValues);
+                                const hash:String = _hashSelectionContext(_dataProvider.chartName, _dataProvider.selectedValues);
                                 if (hash !== _selectionHash) {
                                     _selectionHash = hash;
                                     _offsetMin = Helpers.toPercent(-stats.min);
@@ -220,6 +221,7 @@
              * Resets computed values to their defaults.
              */
             private function _clearCache():void {
+                _chartName = null;
                 _numNodes = 0;
                 _currValue = 0;
                 _currNodeTime = null;
@@ -261,7 +263,7 @@
 
                 _dataProviderChanged = true;
                 invalidateProperties();
-                return new SelectionDetails(selectedValue, patchedValues, anchor);
+                return new SelectionDetails(selectedValue, patchedValues, anchor, dp.chartName);
             }
 
             private function _patchPoint(src:Point, value:Number, offsetMode:Boolean = false):Point {
@@ -350,7 +352,7 @@
             styleName="{getStyle('headerStyle')}"/>
 
         <!-- Shown when there is something selected -->
-        <s:Label text="{chartName} ({_numNodes} {_haveSingleSelection? 'node' : 'nodes'})"
+        <s:Label text="{_chartName} ({_numNodes} {_haveSingleSelection? 'node' : 'nodes'})"
             width="100%"
             styleName="{getStyle('bodyStyle')}"
             visible="{_haveSelection}" includeInLayout="{_haveSelection}"

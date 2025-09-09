@@ -945,7 +945,8 @@
                 var details:SelectionDetails = new SelectionDetails(
                         _nodeToPoint(_selectionManager.selectedNode),
                         _nodesToPoints(_selectionManager.selectedNodes),
-                        _nodeToPoint(_selectionManager.anchorNode)
+                        _nodeToPoint(_selectionManager.anchorNode),
+                        _chartName
                     );
                 dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_CHANGE,
                             _dataProvider.uid, details));

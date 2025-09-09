@@ -9,8 +9,9 @@ package com.github.ciacob.flexnodal.utils {
         private var _selectedValue:Point;
         private var _selectedValues:Vector.<Point>;
         private var _selectionAnchor:Point;
+        private var _chartName:String;
 
-        public function SelectionDetails(selectedValue:Point, selectedValues:Vector.<Point>, selectionAnchor:Point) {
+        public function SelectionDetails(selectedValue:Point, selectedValues:Vector.<Point>, selectionAnchor:Point, chartName:String = null) {
             _selectedValue = selectedValue ? selectedValue.clone() : null;
             _selectedValues = new <Point>[];
             if (selectedValues) {
@@ -19,6 +20,7 @@ package com.github.ciacob.flexnodal.utils {
                 }
             }
             _selectionAnchor = selectionAnchor ? selectionAnchor.clone() : null;
+            _chartName = chartName;
         }
 
         public function get selectedValue():Point {
@@ -35,6 +37,10 @@ package com.github.ciacob.flexnodal.utils {
 
         public function get selectionAnchor():Point {
             return _selectionAnchor ? _selectionAnchor.clone() : null;
+        }
+
+        public function get chartName():String {
+            return _chartName;
         }
     }
 }
