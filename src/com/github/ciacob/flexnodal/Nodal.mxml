@@ -295,6 +295,16 @@
                 if (_dataProviderChanged) {
             
                     _dataProviderChanged = false;
+                    
+                    // Remove any null items from data provider (sanity check)
+                    if (_dataProvider) {
+                        for (var i:int = _dataProvider.length - 1; i >= 0; i--) {
+                            if (_dataProvider[i] == null) {
+                                _dataProvider.splice(i, 1);
+                            }
+                        }
+                    }
+                    
                     _provisionChartLayers(_dataProvider, chartsLayer);
                     _populateChartLayers(_dataProvider);
                     _stylesChanged = true;
