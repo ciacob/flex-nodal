@@ -209,28 +209,28 @@
             
             /**
              * Causes a specified chart item to become active, i.e., drawn on
-             * top of the others, and completely opaque.
+             * top of the others, and completely opaque, also subjecting it to
+             * editing operations, if the current operation mode allows.
              *
-             * @param   item
-             *          The data provider associated to the chart to be
-             *          made active.
+             * @param   uid
+             *          The uid of the chart to be made active.
              */
-            public function set activeChartItem(item:Object):void {
+            public function set activeChartId(uid:String):void {
             
                 // Delay until chart layers stabilize.
                 callLater(function():void {
             
-                        if (!item || !_dataProvider || !chartsLayer || !chartsLayer.numElements) {
+                        if (!uid || !_dataProvider || !chartsLayer || !chartsLayer.numElements) {
                             return;
                         }
             
                         var chart:LineChartLayer = null;
                         for (var i:int = 0; i < chartsLayer.numElements; i++) {
                             const tmpChart:LineChartLayer = chartsLayer.getElementAt(i) as LineChartLayer;
-                            if (!tmpChart) {
+                            if (!tmpChart || !tmpChart.dataProvider) {
                                 continue;
                             }
-                            if (tmpChart.dataProvider === item) {
+                            if (ChartDescriptor(tmpChart.dataProvider).uid === uid) {
                                 chart = tmpChart;
                                 break;
                             }
@@ -304,7 +304,7 @@
                         chartsLayer.getElementAt(chartsLayer.numElements - 1) as LineChartLayer : null;
                     _setActiveChart(topChart);
                     _setChartsAvailability(_operatingMode);
-                    if (topChart) {
+                    if (topChart && topChart.dataProvider) {
                         dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION,
                                     topChart.dataProvider.uid));
                     }
@@ -633,21 +633,6 @@
              * event.
              */
             private function _onNodesChanged(event:ChartEditEvent):void {
-                if (!_dataProvider) {
-                    return;
-                }
-            
-                var editUid:String = event.uid;
-                for (var i:int = 0; i < _dataProvider.length; i++) {
-                    var descriptor:ChartDescriptor = _dataProvider[i];
-                    if (descriptor && descriptor.uid === editUid) {
-                        var edit:ChartEdit = event.edit;
-                        var updated:ChartDescriptor = new ChartDescriptor(editUid, edit.values, edit.name, descriptor.hueFactor, descriptor.dashStyle);
-                        _dataProvider[i] = updated;
-                        break;
-                    }
-                }
-            
                 dispatchEvent(event);
             }
             

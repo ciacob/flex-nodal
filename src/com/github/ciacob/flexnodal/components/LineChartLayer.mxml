@@ -308,23 +308,23 @@
                         !_dataProvider) {
                     return;
                 }
-
+            
                 const selectedNodes:Vector.<Node> = _selectionManager.selectedNodes;
                 if (!selectedNodes || !selectedNodes.length) {
                     return;
                 }
-
+            
                 if (selectedNodes.length != patch.selectedValues.length) {
                     return;
                 }
-
+            
                 _dragBoundsChanged = true;
                 const patchedNodes:Vector.<Point> = patch.selectedValues;
                 for (var i:int = 0; i < patchedNodes.length; i++) {
                     const p:Point = patchedNodes[i];
                     selectedNodes[i].logicalY = p.y;
                 }
-
+            
                 invalidateDisplayList();
                 if (dispatch) {
                     _broadcastNodesChange();
@@ -568,7 +568,7 @@
             private function _nodeToPoint(node:Node):Point {
                 return node ? new Point(node.logicalX, node.logicalY) : null;
             }
-
+            
             /**
              * Converts several nodes to Points and appends them to storage.
              * Synthetic nodes are ignored.
@@ -586,18 +586,18 @@
                 }
                 return out;
             }
-
+            
             /**
              * Parses incoming values into nodes.
              */
             private function _importValues(values:Vector.<Point>):Vector.<Node> {
                 var nodes:Vector.<Node> = new <Node>[];
-
+            
                 const numValues:uint = values ? values.length : 0;
                 for (var i:int = 0; i < numValues; i++) {
                     nodes.push(new Node(values[i].x, values[i].y, false));
                 }
-
+            
                 nodes = _proofNodes(nodes);
                 return nodes;
             }
@@ -678,10 +678,13 @@
             
             /**
              * Listener, executes when the chart line is clicked. Just broadcasts
-             * a NodalEvent.LAYER_CLICK event.
+             * a NodalEvent.LAYER_CLICK event with the `uid` of the clicked chart.
              */
             private function _onChartClicked(event:MouseEvent):void {
-                dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, chartName));
+                if (!_dataProvider) {
+                    return;
+                }
+                dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, _dataProvider.uid));
             }
             
             /**
@@ -769,7 +772,9 @@
                         // Mouse down on a non-synthetic node sets up dragging. Whether dragging actually occurs
                         // depends on the mouse being moved BEFORE a mouse up event is fired.
                     case MouseEvent.MOUSE_DOWN:
-                        dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, chartName));
+                        if (_dataProvider) {
+                            dispatchEvent(new NodalEvent(NodalEvent.LAYER_CLICK, _dataProvider.uid));
+                        }
                         if (!stage ||
                                 node.isSynthetic ||
                                 isNaN(node.screenX) ||
@@ -929,20 +934,27 @@
             }
             
             /**
-             * Sends out information about the current chart selection.
+             * Sends out information about the current chart selection. Broadcasts a
+             * `NodalEvent.SELECTION_CHANGE` event holding the uid of the selected chart
+             * and a `SelectionDetails` instance with information about the actual selection.
              */
             private function _broadcastSelection():void {
+                if (!_dataProvider) {
+                    return;
+                }
                 var details:SelectionDetails = new SelectionDetails(
-                    _nodeToPoint(_selectionManager.selectedNode),
-                    _nodesToPoints(_selectionManager.selectedNodes),
-                    _nodeToPoint(_selectionManager.anchorNode)
-                );
+                        _nodeToPoint(_selectionManager.selectedNode),
+                        _nodesToPoints(_selectionManager.selectedNodes),
+                        _nodeToPoint(_selectionManager.anchorNode)
+                    );
                 dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_CHANGE,
-                    _dataProvider ? _dataProvider.uid : null, details));
+                            _dataProvider.uid, details));
             }
-
+            
             /**
-             * Sends out information about the changed nodes.
+             * Sends out information about the changed nodes. Broadcast a 
+             * `NodalEvent.NODES_CHANGE` event holding the uid of the chart whose nodes were 
+             * altered and a `ChartEdit` instance holding the new, full chart nodes configuration.
              */
             private function _broadcastNodesChange():void {
                 if (!_dataProvider) {
@@ -1079,7 +1091,7 @@
                 const lineColorSelected:uint = Helpers.$getStyle(this, "lineColorSelected", DefaultStyles.DEFAULT_LINE_COLOR_SELECTED);
                 const lineColorAnchor:uint = Helpers.$getStyle(this, "lineColorAnchor", DefaultStyles.DEFAULT_LINE_COLOR_ANCHOR);
                 const thickness:Number = Helpers.$getStyle(this, "lineThickness", DefaultStyles.DEFAULT_LINE_THICKNESS);
-
+            
                 // Prepare for drawing
                 const g:Graphics = _chartLayer.graphics;
                 g.clear();
@@ -1112,7 +1124,7 @@
              */
             private function _drawChartLines(g:Object, nodes:Vector.<Node>,
                     thickness:Number, strokeColor:uint, alpha:Number = 1):void {
-
+            
                 g.lineStyle(thickness, strokeColor, alpha);
                 var linerFn:Function = g.lineTo;
             

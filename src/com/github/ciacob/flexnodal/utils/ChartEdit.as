@@ -46,5 +46,32 @@ package com.github.ciacob.flexnodal.utils {
         public function get values():Vector.<Point> {
             return _values.concat();
         }
+
+        /**
+         * Returns a string representation of this ChartEdit instance.
+         * 
+         * Includes all properties: uid, name, and all values (points).
+         * Each point is displayed as (x,y) coordinates.
+         * 
+         * @return A formatted string containing the uid, name, and all point values.
+         */
+        public function toString():String {
+            var result:String = "ChartEdit {";
+            result += " uid: '" + _uid + "'";
+            result += ", name: '" + _name + "'";
+            result += ", values: [";
+            
+            for (var i:int = 0; i < _values.length; i++) {
+                if (i > 0) {
+                    result += ", ";
+                }
+                var point:Point = _values[i];
+                result += "(" + point.x + "," + point.y + ")";
+            }
+            
+            result += "] }";
+            return result;
+        }
+
     }
 }

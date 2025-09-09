@@ -43,6 +43,13 @@
             // Text and/or icon to display inside the "Average" action button.
             [Bindable]
             public var averageBtnContent:Object = 'Average';
+
+            /**
+             * The uid of the current chart being served by the panel. Not
+             * actually used by `SelectionPanel`, merely passed-through to
+             * dispatched events.
+             */
+            public var chartUid:String;
             
             // UI visibility flag to raise when there is any selection
             [Bindable]
@@ -274,13 +281,13 @@
                     return;
                 }
             
-                if (!_dataProvider) {
+                if (!_dataProvider || !chartUid) {
                     return;
                 }
             
                 const value:Number = Helpers.fromPercent(percent);
                 _dataProvider = _patchDataProvider(_dataProvider, value);
-                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_PATCH, chartName, _dataProvider));
+                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_PATCH, chartUid, _dataProvider));
             }
             
             /**
@@ -288,7 +295,7 @@
              * instruments actual data provider patching and associated notification.
              */
             private function _doPatching(event:Event, offsetMode:Boolean = false):void {
-                if (!_dataProvider || !event || !event.target) {
+                if (!_dataProvider || !chartUid || !event || !event.target) {
                     return;
                 }
             
@@ -311,7 +318,7 @@
                 }
 
                 _dataProvider = _patchDataProvider(_dataProvider, offsetMode ? deltaValue : value, offsetMode);
-                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_PATCH, chartName, _dataProvider));
+                dispatchEvent(new SelectionEvent(NodalEvent.SELECTION_PATCH, chartUid, _dataProvider));
             }
             
             /**
