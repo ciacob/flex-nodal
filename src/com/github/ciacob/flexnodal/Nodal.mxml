@@ -260,7 +260,7 @@
                 if (!_activeChart) {
                     return;
                 }
-                _activeChart.deleteSelection(false);
+                _activeChart.deleteSelection();
             }
             
             /**
@@ -309,15 +309,8 @@
                     _populateChartLayers(_dataProvider);
                     _stylesChanged = true;
             
-                    // Automatically activate the last chart added.
-                    const topChart:LineChartLayer = (chartsLayer && chartsLayer.numElements > 0) ?
-                        chartsLayer.getElementAt(chartsLayer.numElements - 1) as LineChartLayer : null;
-                    _setActiveChart(topChart);
                     _setChartsAvailability(_operatingMode);
-                    if (topChart && topChart.dataProvider) {
-                        dispatchEvent(new NodalEvent(NodalEvent.CHART_ACTIVATION,
-                                    topChart.dataProvider.uid));
-                    }
+                    
                     invalidateDisplayList();
                 }
             
